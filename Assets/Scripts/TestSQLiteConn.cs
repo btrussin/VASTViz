@@ -47,11 +47,11 @@ public class TestSQLiteConn : MonoBehaviour {
     public GameObject timeline;
 
     // Use this for initialization
-    void Start () {
+    void Start() {
 
         iterTimeOffset = maxIterTime * 1000.0;
 
-        for ( int i = 0; i < 3; i++ )
+        for (int i = 0; i < 3; i++)
         {
             subnetMaps[i] = new Dictionary<long, string>();
 
@@ -87,13 +87,13 @@ public class TestSQLiteConn : MonoBehaviour {
 
         setupTimeSlices();
 
-        for( int i = 0; i < 3; i++ )
+        for (int i = 0; i < 3; i++)
         {
             prevIpsSeen[i] = new Dictionary<long, String>();
             nextIpsSeen[i] = new Dictionary<long, String>();
         }
 
-       
+
 
         currTimeIdx = 0;
 
@@ -116,16 +116,16 @@ public class TestSQLiteConn : MonoBehaviour {
         }
 
         if (Input.GetKeyDown(KeyCode.C)) for (int i = 0; i < 3; i++) Debug.Log("Subnet " + (i + 1) + ": " + currIpsSeen[i].Count);
-        
 
-        if ( queryActive )
+
+        if (queryActive)
         {
             long ipNum;
             string ipAddress;
 
             int idx;
 
-           // int numLoaded = 0;
+            // int numLoaded = 0;
             double currTime = DateTime.Now.TimeOfDay.TotalMilliseconds;
             double maxTime = currTime + iterTimeOffset;
 
@@ -144,7 +144,7 @@ public class TestSQLiteConn : MonoBehaviour {
                         {
                             if (ipNum <= maxSubnetIpNum[idx] && ipNum >= minSubnetIpNum[idx])
                             {
-                                if( !nextIpsSeen[idx].TryGetValue(ipNum, out tmpValue) )
+                                if (!nextIpsSeen[idx].TryGetValue(ipNum, out tmpValue))
                                 {
                                     nextIpsSeen[idx].Add(ipNum, ipAddress);
                                 }
@@ -153,7 +153,7 @@ public class TestSQLiteConn : MonoBehaviour {
                             }
                         }
                     }
-                    catch (System.InvalidCastException e){}
+                    catch (System.InvalidCastException e) { }
 
                     //numLoaded++;
                     currTime = DateTime.Now.TimeOfDay.TotalMilliseconds;
@@ -166,7 +166,7 @@ public class TestSQLiteConn : MonoBehaviour {
                 else if (dataReader.NextResult()) continue;
                 else hasResultSets = false;
 
-            } 
+            }
 
             if (!hasResultSets)
             {
@@ -176,8 +176,8 @@ public class TestSQLiteConn : MonoBehaviour {
 
                 for (int i = 0; i < subnetObjects.Length; i++)
                 {
-                    
-                    if( prevIpsSeen[i] != null ) prevIpsSeen[i].Clear();
+
+                    if (prevIpsSeen[i] != null) prevIpsSeen[i].Clear();
                     prevIpsSeen[i] = currIpsSeen[i];
                     currIpsSeen[i] = nextIpsSeen[i];
 
@@ -187,8 +187,8 @@ public class TestSQLiteConn : MonoBehaviour {
 
         }
 
-       
-	}
+
+    }
 
     void setupTimeSlices()
     {
@@ -201,14 +201,14 @@ public class TestSQLiteConn : MonoBehaviour {
         timeSliceCounts = new int[numSlices];
 
         timeSlices[0] = minUTCTime;
-        for ( int i = 1; i < timeSlices.Length; i++ )
+        for (int i = 1; i < timeSlices.Length; i++)
         {
             timeSlices[i] = timeSlices[i - 1] + numSecs;
         }
 
         bool getTotals = true;
 
-        if( getTotals )
+        if (getTotals)
         {
             string sql = "";
             string tableName = "networkflow";
@@ -227,7 +227,7 @@ public class TestSQLiteConn : MonoBehaviour {
             startTime = DateTime.Now.TimeOfDay;
 
             maxCount = numSlices;
-            for ( int i = 0; i < numSlices - 1 && i < maxCount; i++ )
+            for (int i = 0; i < numSlices - 1 && i < maxCount; i++)
             {
                 IDbCommand cmd = dbconn.CreateCommand();
 
@@ -246,7 +246,7 @@ public class TestSQLiteConn : MonoBehaviour {
 
             Debug.Log("Time: ");
 
-            for (int i = 0; i < numSlices - 1 && i < maxCount; i++ )
+            for (int i = 0; i < numSlices - 1 && i < maxCount; i++)
             {
                 //Debug.Log("["+i+"]: " + timeSliceCounts[i]);
             }
@@ -256,6 +256,32 @@ public class TestSQLiteConn : MonoBehaviour {
 
         }
 
+    }
+
+    public void setTimeSlice(float inc)
+    {
+        if (inc <= 0.0f) setTimeSlice(0);
+        else if (inc >= 1.0f) setTimeSlice(timeSlices.Length - 1);
+        else setTimeSlice((int)(inc * (float)timeSlices.Length));
+    }
+
+    public void setTimeSlice(int inc)
+    {
+        if (currTimeIdx == inc) return;
+        if (inc < 0 || inc >= timeSlices.Length) return;
+
+        currTimeIdx = inc;
+        getVals();
+    }
+
+    public int getTimeSliceIdx()
+    {
+        return currTimeIdx;
+    }
+
+    public float getTimeSliceFloat()
+    {
+        return (float)currTimeIdx/(float) timeSlices.Length;
     }
 
     void getVals()

@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 public class SubnetMapping : MonoBehaviour {
 
-    public string pointPrefabPath = "Prefabs/PointPrefab.prefab"; //Set by default. May be changed in the editor.
+    //public string pointPrefabPath = "Prefabs/PointPrefab.prefab"; //Set by default. May be changed in the editor.
     public GameObject ptPrefab = null;
 
     Dictionary<int, GameObject> ptMap = new Dictionary<int, GameObject>();
