@@ -34,10 +34,18 @@ public class ViveController : SteamVR_TrackedObject
     public GameObject sqlConnObject;
     TestSQLiteConn sqlConnClass;
 
+    public GameObject timelineGameObject;
+    public GameObject otherController;
+    ViveController otherControllerScript;
+
+    bool hasController = false;
+
     // Use this for initialization
     void Start () {
 
         vrSystem = OpenVR.System;
+
+        otherControllerScript = otherController.GetComponent<ViveController>();
 
         sliderMask = 1 << LayerMask.NameToLayer("slider");
         lineRend = projLineObj.GetComponent<LineRenderer>();
@@ -64,6 +72,12 @@ public class ViveController : SteamVR_TrackedObject
 
     }
 
+    public void releaseController()
+    {
+        hasController = false;
+        timelineGameObject.transform.SetParent(gameObject.transform.parent);
+    }
+
     void updateSliderPosition()
     {
         if (currSliderScript == null) return;
@@ -81,6 +95,19 @@ public class ViveController : SteamVR_TrackedObject
                 (prevState.ulButtonPressed & SteamVR_Controller.ButtonMask.ApplicationMenu) == 0)
             {
                 // hit the menu button
+                if( hasController )
+                {
+                    releaseController();
+                }
+                else
+                {
+                    hasController = true;
+                    otherControllerScript.releaseController();
+                    timelineGameObject.SetActive(true);
+                    timelineGameObject.transform.SetParent(gameObject.transform);
+                    timelineGameObject.transform.localPosition = new Vector3(0.0f, 0.0f, 0.1f);
+                    timelineGameObject.transform.localRotation = Quaternion.Euler(90.0f, 0.0f, 0.0f);
+                }
             }
 
             if ((state.ulButtonPressed & SteamVR_Controller.ButtonMask.Grip) != 0 &&
@@ -132,6 +159,9 @@ public class ViveController : SteamVR_TrackedObject
 
                 }
             }
+
+
+            prevState = state;
         }
     }
 

@@ -8,9 +8,50 @@ public class SubnetMapping : MonoBehaviour {
     //public string pointPrefabPath = "Prefabs/PointPrefab.prefab"; //Set by default. May be changed in the editor.
     public GameObject ptPrefab = null;
 
-    Dictionary<int, GameObject> ptMap = new Dictionary<int, GameObject>();
+    Dictionary<int, GameObject> nfMap = new Dictionary<int, GameObject>();
+    Dictionary<int, GameObject> bbMap = new Dictionary<int, GameObject>();
+    Dictionary<int, GameObject> ipsMap = new Dictionary<int, GameObject>();
 
     Dictionary<int, Vector3> ptVectorMap;
+
+    float minDomain = 0.0f;
+    float maxDomain = 1.0f;
+    float minRange = 0.0f;
+    float maxRange = 1.0f;
+
+    float conversionScale = 1.0f;
+
+    public void setDomain(float min, float max)
+    {
+        minDomain = min;
+        maxDomain = max;
+        setScale();
+    }
+
+    public void setRange(float min, float max)
+    {
+        minRange = min;
+        maxRange = max;
+
+        setScale();
+    }
+
+    private void setScale()
+    {
+        conversionScale = (maxRange - minRange) / (maxDomain - minDomain);
+    }
+
+    private float clamp(float val, float min, float max)
+    {
+        if (val < min) return min;
+        else if (val > max) return max;
+        else return val;
+    }
+
+    public float getScaleVal(float d)
+    {
+        return clamp((d - minDomain) * conversionScale + minRange, minRange, maxRange);
+    }
 
 
 
@@ -18,7 +59,9 @@ public class SubnetMapping : MonoBehaviour {
     void Start () {
         //ptPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(pointPrefabPath);
 
-        
+        setDomain(1.0f, 2000.0f);
+        setRange(0.01f, 0.05f);
+        setScale();
     }
 	
 	// Update is called once per frame
@@ -105,28 +148,71 @@ public class SubnetMapping : MonoBehaviour {
 
         //Vector3[] tmpVecs = getSubnetVectorsWalk(numInMap);
         Vector3[] tmpVecs = getSubnetVectors(vecLayoutWidth, vecLayoutHeight);
+        Vector3 bbOffset = new Vector3(0.0f, 0.0f, -0.1f);
+        Vector3 ipsOffset = new Vector3(0.0f, 0.0f, -0.2f);
 
         int num = 0;
         foreach (KeyValuePair<long, string> entry in map )
         {
+            // min domain = 1
+            // max domain = 2000
+
+            // min range = 0.005
+            // max range = 0.1
+
 
             lowerByte = (int)(entry.Key & 0xFFFF);
-            GameObject point = (GameObject)Instantiate(ptPrefab);
-            point.name = "IP: " + entry.Value;
 
-            point.transform.SetParent(transform);
-            point.transform.position = tmpVecs[num] + transform.position;
+            // the network flow points
+            GameObject nfPoint = (GameObject)Instantiate(ptPrefab);
+            nfPoint.name = "IP(NF): " + entry.Value;
 
-            point.SetActive(false);
+            nfPoint.transform.SetParent(transform);
+            nfPoint.transform.position = tmpVecs[num] + transform.position;
+            nfPoint.transform.localScale = new Vector3(0.05f, 0.05f, 1.0f);
 
-            ptMap.Add(lowerByte, point);
+            nfPoint.SetActive(false);
+
+            nfMap.Add(lowerByte, nfPoint);
+
+            // the big brother points
+            GameObject bbPoint = (GameObject)Instantiate(ptPrefab);
+            bbPoint.name = "IP(BB): " + entry.Value;
+
+            bbPoint.transform.SetParent(transform);
+            bbPoint.transform.position = tmpVecs[num] + transform.position + bbOffset;
+            bbPoint.transform.localScale = new Vector3(0.05f, 0.05f, 1.0f);
+
+            bbPoint.SetActive(false);
+
+            bbMap.Add(lowerByte, bbPoint);
+
+
+            // the IPS points
+            GameObject ipsPoint = (GameObject)Instantiate(ptPrefab);
+            ipsPoint.name = "IP(IPS): " + entry.Value;
+
+            ipsPoint.transform.SetParent(transform);
+            ipsPoint.transform.position = tmpVecs[num] + transform.position + ipsOffset;
+            ipsPoint.transform.localScale = new Vector3(0.05f, 0.05f, 1.0f);
+
+            ipsPoint.SetActive(false);
+
+            ipsMap.Add(lowerByte, ipsPoint);
+
+
+
+
             num++;
         }
     }
 
-    public void activateNodes(Dictionary<long, string> map)
+    public void activateNodes(Dictionary<long, ipDataStruct> map)
     {
-        foreach (KeyValuePair<int, GameObject> entry in ptMap)
+        float tScaleVal;
+
+
+        foreach (KeyValuePair<int, GameObject> entry in nfMap)
         {
             entry.Value.SetActive(false);
         }
@@ -134,12 +220,116 @@ public class SubnetMapping : MonoBehaviour {
         int lowerByte;
         GameObject g;
 
-        foreach (KeyValuePair < long, string> entry in map)
+        foreach (KeyValuePair<long, ipDataStruct> entry in map)
         {
             lowerByte = (int)(entry.Key & 0xFFFF);
-            if (ptMap.TryGetValue(lowerByte, out g))
+            if (nfMap.TryGetValue(lowerByte, out g))
             {
+                tScaleVal = getScaleVal((float)entry.Value.numTimesSeen);
+
+                g.transform.localScale = new Vector3(tScaleVal, tScaleVal, 1.0f);
+
                 g.SetActive(true);
+            }
+        }
+    }
+
+    public void activateBBNodes(Dictionary<long, bbDataStruct> map)
+    {
+        if (map.Count < 1) return;
+
+        Material mat;
+        GameObject g;
+
+        float scale = maxRange * 0.15f + minRange * 0.85f;
+
+        foreach (KeyValuePair<int, GameObject> entry in bbMap)
+        {
+            g = entry.Value;
+            g.SetActive(true);
+            g.transform.localScale = new Vector3(scale, scale, 1.0f);
+            mat = g.GetComponent<MeshRenderer>().material;
+            mat.color = Color.gray;
+        }
+
+        int lowerByte;
+        
+
+        
+
+        scale = maxRange * 0.75f + minRange * 0.25f;
+
+        foreach (KeyValuePair<long, bbDataStruct> entry in map)
+        {
+            lowerByte = (int)(entry.Key & 0xFFFF);
+            if (bbMap.TryGetValue(lowerByte, out g))
+            {
+                g.transform.localScale = new Vector3(scale, scale, 1.0f);
+                g.SetActive(true);
+
+                mat = g.GetComponent<MeshRenderer>().material;
+                switch(entry.Value.status)
+                {
+                    case 3:
+                        mat.color = Color.red;
+                        break;
+                    case 2:
+                        mat.color = Color.yellow;
+                        break;
+                    case 1:
+                        mat.color = Color.green;
+                        break;
+                    default:
+                        g.SetActive(false);
+                        break;
+                }
+            }
+        }
+    }
+
+    public void activateIPSNodes(Dictionary<long, ipsDataStruct> map)
+    {
+        Debug.Log("Trying to show " + map.Count + " IPS nodes");
+
+        foreach (KeyValuePair<int, GameObject> entry in ipsMap)
+        {
+            entry.Value.SetActive(false);
+        }
+
+        int lowerByte;
+        GameObject g;
+
+        Material mat;
+        float scale = maxRange * 0.25f + minRange * 0.75f;
+
+        foreach (KeyValuePair<long, ipsDataStruct> entry in map)
+        {
+            lowerByte = (int)(entry.Key & 0xFFFF);
+            if (ipsMap.TryGetValue(lowerByte, out g))
+            {
+                g.transform.localScale = new Vector3(scale, scale, 1.0f);
+                g.SetActive(true);
+
+                mat = g.GetComponent<MeshRenderer>().material;
+                switch (entry.Value.priority)
+                {
+                    case 6:
+                    case 5:
+                    case 4:
+                        mat.color = Color.red;
+                        break;
+                    case 3:
+                    case 2:
+                        mat.color = Color.yellow;
+                        break;
+                    case 1:
+                    case 0:
+                        mat.color = Color.green;
+                        break;
+                    default:
+                        g.SetActive(false);
+                        break;
+                }
             }
         }
     }

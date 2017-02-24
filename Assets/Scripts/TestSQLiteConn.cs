@@ -5,6 +5,33 @@ using Mono.Data.Sqlite;
 using System.Data;
 using System;
 
+public struct ipDataStruct
+{
+    public string ipAddress;
+    public int numTimesSeen;
+}
+
+public struct bbDataStruct
+{
+    public string ipAddress;
+    public int status;  // 0-UNK, 1-Good, 2-Warning, 3-Problem
+}
+
+
+public struct ipsDataStruct
+{
+    public string ipAddress;
+    public int priority; 
+}
+
+
+public enum dbDataType
+{
+    NETWORK_FLOW,
+    BIG_BROTHER,
+    INTRUSION_PROTECTION
+}
+
 public class TestSQLiteConn : MonoBehaviour {
 
     Dictionary<long, string>[] subnetMaps = new Dictionary<long, string>[3];
@@ -13,19 +40,26 @@ public class TestSQLiteConn : MonoBehaviour {
     long[] maxSubnetIpNum = new long[3];
 
     long minUTCTime = 1364802600; // first minute: 1364802600:  04-01-2013 07:50:00
-    long maxUTCTime = 1366045200; // last minute: 1366045200: 04-15-2013 10:00:00
+    long maxUTCTime = 1366045200; // last minute: 1366045200: 04-15-2013 17:00:00
 
     long[] timeSlices;
-    int[] timeSliceCounts;
+    int[] timesliceNFCounts;
+    int[] timesliceBBCounts;
+    int[] timesliceIPSCounts;
 
-    int numMinutesPerSlice = 30;
+    int numMinutesPerSlice = 5;
     int numSecondsPerSlice;
 
     bool queryActive = false;
 
-    Dictionary<long, String>[] prevIpsSeen = new Dictionary<long, String>[3];
-    Dictionary<long, String>[] currIpsSeen = new Dictionary<long, String>[3];
-    Dictionary<long, String>[] nextIpsSeen = new Dictionary<long, String>[3];
+    Dictionary<long, ipDataStruct>[] currNfIpsSeen = new Dictionary<long, ipDataStruct>[3];
+    Dictionary<long, ipDataStruct>[] nextNfIpsSeen = new Dictionary<long, ipDataStruct>[3];
+
+    Dictionary<long, bbDataStruct>[] currBbIpsSeen = new Dictionary<long, bbDataStruct>[3];
+    Dictionary<long, bbDataStruct>[] nextBbIpsSeen = new Dictionary<long, bbDataStruct>[3];
+
+    Dictionary<long, ipsDataStruct>[] currIPSIpsSeen = new Dictionary<long, ipsDataStruct>[3];
+    Dictionary<long, ipsDataStruct>[] nextIPSIpsSeen = new Dictionary<long, ipsDataStruct>[3];
 
     public double maxIterTime = 0.005;
     double iterTimeOffset;
@@ -45,6 +79,8 @@ public class TestSQLiteConn : MonoBehaviour {
     public GameObject[] subnetObjects = new GameObject[3];
     SubnetMapping[] subnetMappings = new SubnetMapping[3];
     public GameObject timeline;
+
+    dbDataType currDbDataType = dbDataType.NETWORK_FLOW;
 
     // Use this for initialization
     void Start() {
@@ -86,11 +122,18 @@ public class TestSQLiteConn : MonoBehaviour {
 
 
         setupTimeSlices();
+        setupTimeSlicesForBB();
+        setupTimeSlicesForIPS();
 
         for (int i = 0; i < 3; i++)
         {
-            prevIpsSeen[i] = new Dictionary<long, String>();
-            nextIpsSeen[i] = new Dictionary<long, String>();
+            currNfIpsSeen[i] = new Dictionary<long, ipDataStruct>();
+            currBbIpsSeen[i] = new Dictionary<long, bbDataStruct>();
+            currIPSIpsSeen[i] = new Dictionary<long, ipsDataStruct>();
+
+            nextNfIpsSeen[i] = new Dictionary<long, ipDataStruct>();
+            nextBbIpsSeen[i] = new Dictionary<long, bbDataStruct>();
+            nextIPSIpsSeen[i] = new Dictionary<long, ipsDataStruct>();
         }
 
 
@@ -115,13 +158,19 @@ public class TestSQLiteConn : MonoBehaviour {
             getVals();
         }
 
-        if (Input.GetKeyDown(KeyCode.C)) for (int i = 0; i < 3; i++) Debug.Log("Subnet " + (i + 1) + ": " + currIpsSeen[i].Count);
+        if (Input.GetKeyDown(KeyCode.C)) for (int i = 0; i < 3; i++) Debug.Log("Subnet " + (i + 1) + ": " + currNfIpsSeen[i].Count);
 
 
         if (queryActive)
         {
             long ipNum;
             string ipAddress;
+            int numTimesSeen;
+            int statusVal;
+
+            long dstIpNum;
+            string dstIpAddress;
+            int priorityVal;
 
             int idx;
 
@@ -129,41 +178,173 @@ public class TestSQLiteConn : MonoBehaviour {
             double currTime = DateTime.Now.TimeOfDay.TotalMilliseconds;
             double maxTime = currTime + iterTimeOffset;
 
-            string tmpValue;
+            ipDataStruct tmpNfValue = new ipDataStruct();
+            bbDataStruct tmpBbValue = new bbDataStruct();
+            ipsDataStruct tmpIPSValue = new ipsDataStruct();
 
             while (currTime < maxTime && hasResultSets)
             {
-                while (dataReader.Read())
+                if (currDbDataType == dbDataType.NETWORK_FLOW)
                 {
-                    try
+                    while (dataReader.Read())
                     {
-                        ipAddress = dataReader.GetString(0);
-                        ipNum = dataReader.GetInt64(1);
-
-                        for (idx = 0; idx < 3; idx++)
+                        try
                         {
-                            if (ipNum <= maxSubnetIpNum[idx] && ipNum >= minSubnetIpNum[idx])
-                            {
-                                if (!nextIpsSeen[idx].TryGetValue(ipNum, out tmpValue))
-                                {
-                                    nextIpsSeen[idx].Add(ipNum, ipAddress);
-                                }
+                            ipAddress = dataReader.GetString(0);
+                            ipNum = dataReader.GetInt64(1);
+                            numTimesSeen = dataReader.GetInt32(2);
 
-                                break;
+                            for (idx = 0; idx < 3; idx++)
+                            {
+                                if (ipNum <= maxSubnetIpNum[idx] && ipNum >= minSubnetIpNum[idx])
+                                {
+                                    //nextIpsSeen[idx].
+
+                                    if (!nextNfIpsSeen[idx].TryGetValue(ipNum, out tmpNfValue))
+                                    {
+
+                                        tmpNfValue = new ipDataStruct();
+                                        tmpNfValue.ipAddress = ipAddress;
+                                        tmpNfValue.numTimesSeen = numTimesSeen;
+                                        nextNfIpsSeen[idx].Add(ipNum, tmpNfValue);   
+                                    }
+                                    else
+                                    {
+                                        tmpNfValue.numTimesSeen += numTimesSeen;
+                                    }
+
+                                    break;
+                                }
                             }
                         }
+
+                        catch (System.InvalidCastException e)
+                        {
+                            Debug.Log(e);
+                        }
+
+                        currTime = DateTime.Now.TimeOfDay.TotalMilliseconds;
+
+                        if (currTime >= maxTime) break;
                     }
-                    catch (System.InvalidCastException e) { }
+                }
+                else if (currDbDataType == dbDataType.BIG_BROTHER)
+                {
+                    while (dataReader.Read())
+                    {
+                        try
+                        {
+                            ipAddress = dataReader.GetString(0);
+                            ipNum = dataReader.GetInt64(1);
+                            statusVal = dataReader.GetInt32(2);
 
-                    //numLoaded++;
-                    currTime = DateTime.Now.TimeOfDay.TotalMilliseconds;
+                            for (idx = 0; idx < 3; idx++)
+                            {
+                                if (ipNum <= maxSubnetIpNum[idx] && ipNum >= minSubnetIpNum[idx])
+                                {
+                                    //nextIpsSeen[idx].
 
-                    if (currTime >= maxTime) break;
+                                    if (!nextBbIpsSeen[idx].TryGetValue(ipNum, out tmpBbValue))
+                                    {
 
+                                        tmpBbValue = new bbDataStruct();
+                                        tmpBbValue.ipAddress = ipAddress;
+                                        tmpBbValue.status = statusVal;
+                                        nextBbIpsSeen[idx].Add(ipNum, tmpBbValue);
+
+                                    }
+                                    else
+                                    {
+                                        if (statusVal > tmpBbValue.status) tmpBbValue.status = statusVal;
+                                    }
+
+                                    break;
+                                }
+                            }
+                        }
+
+                        catch (System.InvalidCastException e)
+                        {
+                            Debug.Log(e.Message);
+                        }
+
+                        currTime = DateTime.Now.TimeOfDay.TotalMilliseconds;
+
+                        if (currTime >= maxTime) break;
+                    }
+                }
+                else if (currDbDataType == dbDataType.INTRUSION_PROTECTION)
+                {
+                    while (dataReader.Read())
+                    {
+                        try
+                        {
+                            ipAddress = dataReader.GetString(0);
+                            ipNum = dataReader.GetInt64(1);
+                            dstIpAddress = dataReader.GetString(2);
+                            dstIpNum = dataReader.GetInt64(3);
+
+                            priorityVal = dataReader.GetInt32(4);
+
+                            for (idx = 0; idx < 3; idx++)
+                            {
+                                if (ipNum <= maxSubnetIpNum[idx] && ipNum >= minSubnetIpNum[idx])
+                                {
+                                    if (!nextIPSIpsSeen[idx].TryGetValue(ipNum, out tmpIPSValue))
+                                    {
+                                        tmpIPSValue = new ipsDataStruct();
+                                        tmpIPSValue.ipAddress = ipAddress;
+                                        tmpIPSValue.priority = priorityVal;
+                                        nextIPSIpsSeen[idx].Add(ipNum, tmpIPSValue);
+                                    }
+                                    else
+                                    {
+                                        if (priorityVal > tmpIPSValue.priority) tmpIPSValue.priority = priorityVal;
+                                    }
+
+                                    break;
+                                }
+                            }
+
+                            for (idx = 0; idx < 3; idx++)
+                            {
+                                if (dstIpNum <= maxSubnetIpNum[idx] && dstIpNum >= minSubnetIpNum[idx])
+                                {
+                                    if (!nextIPSIpsSeen[idx].TryGetValue(dstIpNum, out tmpIPSValue))
+                                    {
+                                        tmpIPSValue = new ipsDataStruct();
+                                        tmpIPSValue.ipAddress = dstIpAddress;
+                                        tmpIPSValue.priority = priorityVal;
+                                        nextIPSIpsSeen[idx].Add(dstIpNum, tmpIPSValue);
+                                    }
+                                    else
+                                    {
+                                        if (priorityVal > tmpIPSValue.priority) tmpIPSValue.priority = priorityVal;
+                                    }
+
+                                    break;
+                                }
+                            }
+                        }
+
+                        catch (System.InvalidCastException e)
+                        {
+                            Debug.Log(e.Message);
+                        }
+
+                        currTime = DateTime.Now.TimeOfDay.TotalMilliseconds;
+
+                        if (currTime >= maxTime) break;
+                    }
                 }
 
                 if (currTime >= maxTime) break;
-                else if (dataReader.NextResult()) continue;
+                else if (dataReader.NextResult())
+                {
+                    if (currDbDataType == dbDataType.NETWORK_FLOW) currDbDataType = dbDataType.BIG_BROTHER;
+                    else if (currDbDataType == dbDataType.BIG_BROTHER) currDbDataType = dbDataType.INTRUSION_PROTECTION;
+                    continue;
+                }
                 else hasResultSets = false;
 
             }
@@ -176,12 +357,17 @@ public class TestSQLiteConn : MonoBehaviour {
 
                 for (int i = 0; i < subnetObjects.Length; i++)
                 {
+                    currNfIpsSeen[i].Clear();
+                    currBbIpsSeen[i].Clear();
+                    currIPSIpsSeen[i].Clear();
 
-                    if (prevIpsSeen[i] != null) prevIpsSeen[i].Clear();
-                    prevIpsSeen[i] = currIpsSeen[i];
-                    currIpsSeen[i] = nextIpsSeen[i];
+                    currNfIpsSeen[i] = nextNfIpsSeen[i];
+                    currBbIpsSeen[i] = nextBbIpsSeen[i];
+                    currIPSIpsSeen[i] = nextIPSIpsSeen[i];
 
-                    subnetMappings[i].activateNodes(nextIpsSeen[i]);
+                    subnetMappings[i].activateNodes(nextNfIpsSeen[i]);
+                    subnetMappings[i].activateBBNodes(nextBbIpsSeen[i]);
+                    subnetMappings[i].activateIPSNodes(nextIPSIpsSeen[i]);
                 }
             }
 
@@ -198,7 +384,7 @@ public class TestSQLiteConn : MonoBehaviour {
         int numSlices = (int)Math.Ceiling((double)diff / (double)numSecs);
 
         timeSlices = new long[numSlices];
-        timeSliceCounts = new int[numSlices];
+        timesliceNFCounts = new int[numSlices];
 
         timeSlices[0] = minUTCTime;
         for (int i = 1; i < timeSlices.Length; i++)
@@ -213,11 +399,11 @@ public class TestSQLiteConn : MonoBehaviour {
             string sql = "";
             string tableName = "networkflow";
 
-            if (numMinutesPerSlice % 60 == 0) tableName = "nfminute_60";
-            else if (numMinutesPerSlice % 30 == 0) tableName = "nfminute_30";
-            else if (numMinutesPerSlice % 10 == 0) tableName = "nfminute_10";
-            else if (numMinutesPerSlice % 5 == 0) tableName = "nfminute_5";
-            else tableName = "nfminute_1";
+            if (numMinutesPerSlice % 60 == 0) tableName = "nfipcount_60";
+            else if (numMinutesPerSlice % 30 == 0) tableName = "nfipcount_30";
+            else if (numMinutesPerSlice % 10 == 0) tableName = "nfipcount_10";
+            else if (numMinutesPerSlice % 5 == 0) tableName = "nfipcount_5";
+            else tableName = "nfipcount_1";
 
             int maxCount = 10;
 
@@ -237,22 +423,121 @@ public class TestSQLiteConn : MonoBehaviour {
                 IDataReader reader = cmd.ExecuteReader();
                 while (reader.Read())
                 {
-                    timeSliceCounts[i] = reader.GetInt32(0);
+                    timesliceNFCounts[i] = reader.GetInt32(0);
                 }
 
             }
 
             endTime = DateTime.Now.TimeOfDay;
 
-            Debug.Log("Time: ");
+            TimelineScript timelineScript = timeline.GetComponent<TimelineScript>();
+            timelineScript.createLines(timesliceNFCounts, Color.white, Vector3.zero);
 
-            for (int i = 0; i < numSlices - 1 && i < maxCount; i++)
+        }
+
+    }
+
+
+    void setupTimeSlicesForBB()
+    {
+        long numSecs = (long)numSecondsPerSlice;
+
+        long diff = maxUTCTime - minUTCTime;
+        //int numSlices = (int)Math.Ceiling((double)diff / (double)numSecs);
+
+
+        timesliceBBCounts = new int[timeSlices.Length];
+
+
+
+        bool getTotals = true;
+
+        if (getTotals)
+        {
+            string sql = "";
+            string tableName = "bigbrother";
+
+            int maxCount = 10;
+
+            TimeSpan startTime;
+            TimeSpan endTime;
+
+            startTime = DateTime.Now.TimeOfDay;
+
+            maxCount = timeSlices.Length;
+            for (int i = 0; i < timeSlices.Length - 1 && i < maxCount; i++)
             {
-                //Debug.Log("["+i+"]: " + timeSliceCounts[i]);
+                IDbCommand cmd = dbconn.CreateCommand();
+
+                sql = "SELECT COUNT(*) FROM " + tableName + " WHERE currenttime>=" + timeSlices[i] + " AND currenttime<" + timeSlices[i + 1] + ";";
+                cmd.CommandText = sql;
+
+                IDataReader reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    timesliceBBCounts[i] = reader.GetInt32(0);
+                }
+
             }
 
+            endTime = DateTime.Now.TimeOfDay;
+
+            Vector3 offset = new Vector3(0.0f, 0.0f, -0.02f);
+
             TimelineScript timelineScript = timeline.GetComponent<TimelineScript>();
-            timelineScript.createLines(timeSliceCounts);
+            timelineScript.createLines(timesliceBBCounts, Color.red, offset);
+
+
+
+        }
+
+    }
+
+    void setupTimeSlicesForIPS()
+    {
+        
+        timesliceIPSCounts = new int[timeSlices.Length];
+
+
+
+        bool getTotals = true;
+
+        if (getTotals)
+        {
+            string sql = "";
+            string tableName = "ipsdata";
+
+            int maxCount = 10;
+
+            TimeSpan startTime;
+            TimeSpan endTime;
+
+            startTime = DateTime.Now.TimeOfDay;
+
+            maxCount = timeSlices.Length;
+            for (int i = 0; i < timeSlices.Length - 1 && i < maxCount; i++)
+            {
+                IDbCommand cmd = dbconn.CreateCommand();
+
+                sql = "SELECT COUNT(*) FROM " + tableName + " WHERE dateTimeNum>=" + timeSlices[i] + " AND dateTimeNum<" + timeSlices[i + 1] + ";";
+                cmd.CommandText = sql;
+
+                IDataReader reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    timesliceIPSCounts[i] = reader.GetInt32(0);
+                }
+
+            }
+
+            endTime = DateTime.Now.TimeOfDay;
+
+            Vector3 offset = new Vector3(0.0f, 0.0f, -0.04f);
+
+            TimelineScript timelineScript = timeline.GetComponent<TimelineScript>();
+            timelineScript.createLines(timesliceIPSCounts, Color.yellow, offset);
+
+
 
         }
 
@@ -286,12 +571,13 @@ public class TestSQLiteConn : MonoBehaviour {
 
     void getVals()
     {
-        if (currTimeIdx >= timeSlices.Length) return;
+        if (currTimeIdx >= timeSlices.Length-1 || currTimeIdx < 0 ) return;
 
         for (int i = 0; i < subnetObjects.Length; i++)
         {
-            nextIpsSeen[i] = new Dictionary<long, string>();
-
+            nextNfIpsSeen[i] = new Dictionary<long, ipDataStruct>();
+            nextBbIpsSeen[i] = new Dictionary<long, bbDataStruct>();
+            nextIPSIpsSeen[i] = new Dictionary<long, ipsDataStruct>();
         }
 
         if (dataReader != null)
@@ -309,15 +595,15 @@ public class TestSQLiteConn : MonoBehaviour {
         string sql = "";
         string tableName = "networkflow";
 
-        if (numMinutesPerSlice % 60 == 0) tableName = "nfminute_60";
-        else if (numMinutesPerSlice % 30 == 0) tableName = "nfminute_30";
-        else if (numMinutesPerSlice % 10 == 0) tableName = "nfminute_10";
-        else if (numMinutesPerSlice % 5 == 0) tableName = "nfminute_5";
-        else tableName = "nfminute_1";
+        if (numMinutesPerSlice % 60 == 0) tableName = "nfipcount_60";
+        else if (numMinutesPerSlice % 30 == 0) tableName = "nfipcount_30";
+        else if (numMinutesPerSlice % 10 == 0) tableName = "nfipcount_10";
+        else if (numMinutesPerSlice % 5 == 0) tableName = "nfipcount_5";
+        else tableName = "nfipcount_1";
 
-        sql = "SELECT firstSeenSrcIp, srcIpNum from " + tableName + " WHERE TimeSeconds>=" + timeSlices[currTimeIdx] + " AND TimeSeconds<" + timeSlices[currTimeIdx + 1] + ";" +
-                 "SELECT firstSeenDestIp, dstIpNum from " + tableName + " WHERE TimeSeconds>=" + timeSlices[currTimeIdx] + " AND TimeSeconds<" + timeSlices[currTimeIdx + 1] + ";" +
-                 "SELECT receivedfrom, recIpNum from bigbrother WHERE currenttime>=" + timeSlices[currTimeIdx] + " AND currenttime<" + timeSlices[currTimeIdx + 1] + ";";
+        sql = "SELECT ipAddress, ipNum, numTimesSeen from " + tableName + " WHERE TimeSeconds>=" + timeSlices[currTimeIdx] + " AND TimeSeconds<" + timeSlices[currTimeIdx + 1] + ";" +
+            "SELECT receivedfrom, recIpNum, statusNum from bigbrother WHERE currenttime>= " + timeSlices[currTimeIdx] + " AND currenttime< " + timeSlices[currTimeIdx + 1] + "; " +
+            "SELECT SrcIp, srcIpNum, destIp, dstIpNum, priorityNum from ipsdata WHERE dateTimeNum>= " + timeSlices[currTimeIdx] + " AND dateTimeNum< " + timeSlices[currTimeIdx + 1] + "; ";
         dbcmd = dbconn.CreateCommand();
         dbcmd.CommandText = sql;
 
@@ -327,7 +613,9 @@ public class TestSQLiteConn : MonoBehaviour {
 
         queryActive = true;
         hasResultSets = true;
-        
+
+        currDbDataType = dbDataType.NETWORK_FLOW;
+
     }
 
     void setupAllSubnets()

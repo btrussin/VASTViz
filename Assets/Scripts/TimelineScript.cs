@@ -4,7 +4,6 @@ using System.Collections;
 public class TimelineScript : MonoBehaviour {
 
     public Material lineMaterial;
-    Color color = Color.white;
     public GameObject slider;
     public GameObject sliderLine;
     public GameObject sliderPoint;
@@ -39,7 +38,7 @@ public class TimelineScript : MonoBehaviour {
         }
     }
 
-    public void createLines(int[] countVals)
+    public void createLines(int[] countVals, Color color, Vector3 graphOffset)
     {
         stepDistance = 1.0f / (float)(countVals.Length - 1);
 
@@ -66,15 +65,18 @@ public class TimelineScript : MonoBehaviour {
         Vector3 forward = transform.forward;
         Vector3 right = transform.right;
 
+        //Vector3 mainOffset = transform.position + new Vector3(0.0f, 0.0f, 0.1f);
+        Vector3 mainOffset = transform.position;
+
         for (int i = 0; i < countVals.Length; i++)
         {
-            tmpV = new Vector3(currX, tmpVals[i] * yScale, 0.0f);
+            tmpV = new Vector3(currX, tmpVals[i] * yScale, 0.0f) + graphOffset;
 
             pts[i].x = Vector3.Dot(tmpV, right);
             pts[i].y = Vector3.Dot(tmpV, up);
-            pts[i].z = Vector3.Dot(tmpV, forward);
+            pts[i].z = -Vector3.Dot(tmpV, forward);
 
-            pts[i] += transform.position;
+            pts[i] += mainOffset;
 
             currX += xInc;
         }
@@ -90,6 +92,7 @@ public class TimelineScript : MonoBehaviour {
         rend.startColor = color;
         rend.endColor = color;
         rend.numPositions = countVals.Length;
+        rend.useWorldSpace = false;
 
         rend.material = lineMaterial;
 
@@ -129,10 +132,10 @@ public class TimelineScript : MonoBehaviour {
         Vector3[] positions = new Vector3[2];
         lineRend.GetPositions(positions);
 
-        Vector3 leftPoint = positions[0];
-        Vector3 rightPoint = positions[1];
 
-        
+        Vector3 leftPoint = gameObject.transform.position + positions[0].x * gameObject.transform.right + positions[0].y * gameObject.transform.up + positions[0].z * gameObject.transform.forward;
+        Vector3 rightPoint = gameObject.transform.position + positions[1].x * gameObject.transform.right + positions[1].y * gameObject.transform.up + positions[1].z * gameObject.transform.forward;
+
         // project that point onto the world positions of the slider ends
         Vector3 v1 = rightPoint - leftPoint;
         Vector3 v2 = propPos - leftPoint;
