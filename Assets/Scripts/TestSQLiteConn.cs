@@ -5,6 +5,19 @@ using Mono.Data.Sqlite;
 using System.Data;
 using System;
 
+public enum ipType
+{
+    WORKSTATION,
+    SERVER
+}
+
+public struct ipInfo
+{
+    public int subnet;
+    public string ipAddress;
+    public ipType type;
+}
+
 public struct ipDataStruct
 {
     public string ipAddress;
@@ -34,7 +47,7 @@ public enum dbDataType
 
 public class TestSQLiteConn : MonoBehaviour {
 
-    Dictionary<long, string>[] subnetMaps = new Dictionary<long, string>[3];
+    Dictionary<long, ipInfo>[] subnetMaps = new Dictionary<long, ipInfo>[3];
 
     long[] minSubnetIpNum = new long[3];
     long[] maxSubnetIpNum = new long[3];
@@ -82,6 +95,8 @@ public class TestSQLiteConn : MonoBehaviour {
 
     dbDataType currDbDataType = dbDataType.NETWORK_FLOW;
 
+    bool inAnimation = false;
+
     // Use this for initialization
     void Start() {
 
@@ -89,7 +104,7 @@ public class TestSQLiteConn : MonoBehaviour {
 
         for (int i = 0; i < 3; i++)
         {
-            subnetMaps[i] = new Dictionary<long, string>();
+            subnetMaps[i] = new Dictionary<long, ipInfo>();
 
             minSubnetIpNum[i] = getIpNumFromString("172." + (i + 1) + "0.0.0");
             maxSubnetIpNum[i] = getIpNumFromString("172." + (i + 1) + "0.255.255");
@@ -147,15 +162,18 @@ public class TestSQLiteConn : MonoBehaviour {
     // Update is called once per frame
     void Update() {
 
-
-
-        if (Input.GetKeyDown(KeyCode.Space) && !queryActive)
+        if ((Input.GetKeyDown(KeyCode.Space) || inAnimation) && !queryActive)
         {
             currTimeIdx++;
 
             if (currTimeIdx >= timeSlices.Length) currTimeIdx = 0;
 
+            TimelineScript ts = timeline.GetComponent<TimelineScript>();
+            ts.updateSliderPosition((float)currTimeIdx / (float)timeSlices.Length);
+
             getVals();
+
+
         }
 
         if (Input.GetKeyDown(KeyCode.C)) for (int i = 0; i < 3; i++) Debug.Log("Subnet " + (i + 1) + ": " + currNfIpsSeen[i].Count);
@@ -164,7 +182,7 @@ public class TestSQLiteConn : MonoBehaviour {
         if (queryActive)
         {
             long ipNum;
-            string ipAddress;
+            string ipAddress = "";
             int numTimesSeen;
             int statusVal;
 
@@ -265,7 +283,7 @@ public class TestSQLiteConn : MonoBehaviour {
 
                         catch (System.InvalidCastException e)
                         {
-                            Debug.Log(e.Message);
+                            Debug.Log(e.Message + " for ip/time: " + ipAddress + "/" + timeSlices[currTimeIdx]);
                         }
 
                         currTime = DateTime.Now.TimeOfDay.TotalMilliseconds;
@@ -374,6 +392,16 @@ public class TestSQLiteConn : MonoBehaviour {
         }
 
 
+    }
+
+    public void startAnimation()
+    {
+        inAnimation = true;
+    }
+
+    public void stopAnimation()
+    {
+        inAnimation = false;
     }
 
     void setupTimeSlices()
@@ -620,7 +648,70 @@ public class TestSQLiteConn : MonoBehaviour {
 
     void setupAllSubnets()
     {
+        Dictionary<string, int> typeMap = new Dictionary<string, int>();
+        string sql = "SELECT id, description FROM iptypemap;";
+        IDbCommand cmd = dbconn.CreateCommand();
+        cmd.CommandText = sql;
 
+        int id;
+        string desc;
+
+        IDataReader reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            id = reader.GetInt32(0);
+            desc = reader.GetString(1);
+
+            typeMap.Add(desc, id);
+        }
+
+        int workstationId;
+
+        if (!typeMap.TryGetValue("Workstation", out workstationId)) {
+            Debug.LogError("Could not get Workstatin type ID");
+            return;
+        }
+
+
+
+
+        sql = "SELECT subnet, ipNum, ipAddress, type FROM ipmap;";
+        cmd = dbconn.CreateCommand();
+        cmd.CommandText = sql;
+
+        int subnet;
+        long ipNum;
+        string ipAddress;
+        int type;
+
+        ipInfo currInfo;
+
+
+        reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            subnet = reader.GetInt32(0);
+            ipNum = reader.GetInt64(1);
+            ipAddress = reader.GetString(2);
+            type = reader.GetInt32(3);
+
+            currInfo = new ipInfo();
+
+            currInfo.subnet = subnet;
+            currInfo.ipAddress = ipAddress;
+            if (type == workstationId) currInfo.type = ipType.WORKSTATION;
+            else currInfo.type = ipType.SERVER;
+
+            if( subnet > 0 && subnet < 4 )
+            {
+                subnetMaps[subnet-1].Add(ipNum, currInfo);
+            }
+
+        }
+
+
+
+        /*
         string[] lines = System.IO.File.ReadAllLines(@"C:\\Users\\btrus\\Documents\\VAST\\sqlite\\uniqueIPsBySubnet.txt");
         char[] sep = { '|' };
 
@@ -650,6 +741,7 @@ public class TestSQLiteConn : MonoBehaviour {
             }
 
         }
+        */
 
     }
 

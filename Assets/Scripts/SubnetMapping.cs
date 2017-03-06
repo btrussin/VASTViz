@@ -8,9 +8,22 @@ public class SubnetMapping : MonoBehaviour {
     //public string pointPrefabPath = "Prefabs/PointPrefab.prefab"; //Set by default. May be changed in the editor.
     public GameObject ptPrefab = null;
 
+    /*
+    layer[0]: netflow layer
+    layer[1]: bigbrother layer
+    layer[2]: ips layer
+    layer[3]: server layer
+    */
+    public GameObject[] layers = new GameObject[4];
+   
+    public GameObject bgQuad;
+
+    
+
     Dictionary<int, GameObject> nfMap = new Dictionary<int, GameObject>();
     Dictionary<int, GameObject> bbMap = new Dictionary<int, GameObject>();
     Dictionary<int, GameObject> ipsMap = new Dictionary<int, GameObject>();
+    Dictionary<int, GameObject> serverMap = new Dictionary<int, GameObject>();
 
     Dictionary<int, Vector3> ptVectorMap;
 
@@ -20,6 +33,10 @@ public class SubnetMapping : MonoBehaviour {
     float maxRange = 1.0f;
 
     float conversionScale = 1.0f;
+
+    public float currLayerDist = 0.1f;
+
+    public bool useRandomWalk = true;
 
     public void setDomain(float min, float max)
     {
@@ -59,15 +76,40 @@ public class SubnetMapping : MonoBehaviour {
     void Start () {
         //ptPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(pointPrefabPath);
 
+       
+
+
         setDomain(1.0f, 2000.0f);
         setRange(0.01f, 0.05f);
         setScale();
+
+
+
+
+        updateDistance(currLayerDist);
+
     }
 	
 	// Update is called once per frame
 	void Update () {
-	
-	}
+        
+    }
+
+    public void updateDistance(float dist)
+    {
+        if (dist < 0.0f) return;
+        currLayerDist = dist;
+
+        bgQuad.transform.localPosition = new Vector3(0.0f, 0.0f, 0.1f);
+
+        float offset = -currLayerDist;
+        for (int i = 0; i < layers.Length; i++)
+        {
+            layers[i].transform.localPosition = new Vector3(0.0f, 0.0f, offset);
+            offset -= currLayerDist;
+        }
+
+    }
 
     private Vector3[] getSubnetVectorsWalk(int numPoints)
     {
@@ -123,7 +165,7 @@ public class SubnetMapping : MonoBehaviour {
         return tmpVecs;
     }
 
-    public void mapAllIps(Dictionary<long, string> map)
+    public void mapAllIps(Dictionary<long, ipInfo> map)
     {
         
         int lowerByte;
@@ -146,13 +188,20 @@ public class SubnetMapping : MonoBehaviour {
             vecLayoutHeight--;
         }
 
-        //Vector3[] tmpVecs = getSubnetVectorsWalk(numInMap);
-        Vector3[] tmpVecs = getSubnetVectors(vecLayoutWidth, vecLayoutHeight);
-        Vector3 bbOffset = new Vector3(0.0f, 0.0f, -0.1f);
-        Vector3 ipsOffset = new Vector3(0.0f, 0.0f, -0.2f);
+        Vector3[] tmpVecs;
+
+        if(useRandomWalk)
+        {
+            tmpVecs = getSubnetVectorsWalk(numInMap);
+        }
+        else
+        {
+            tmpVecs = getSubnetVectors(vecLayoutWidth, vecLayoutHeight);
+        }
 
         int num = 0;
-        foreach (KeyValuePair<long, string> entry in map )
+        ipInfo currInfo;
+        foreach (KeyValuePair<long, ipInfo> entry in map )
         {
             // min domain = 1
             // max domain = 2000
@@ -162,43 +211,62 @@ public class SubnetMapping : MonoBehaviour {
 
 
             lowerByte = (int)(entry.Key & 0xFFFF);
+            currInfo = entry.Value;
 
-            // the network flow points
-            GameObject nfPoint = (GameObject)Instantiate(ptPrefab);
-            nfPoint.name = "IP(NF): " + entry.Value;
+            if( currInfo.type == ipType.WORKSTATION )
+            {
+                // the network flow points
+                GameObject nfPoint = (GameObject)Instantiate(ptPrefab);
+                nfPoint.name = "IP(NF): " + currInfo.ipAddress;
+      
+                nfPoint.transform.SetParent(layers[0].transform);
+                nfPoint.transform.localPosition = tmpVecs[num];
+                nfPoint.transform.localScale = new Vector3(0.05f, 0.05f, 1.0f);
 
-            nfPoint.transform.SetParent(transform);
-            nfPoint.transform.position = tmpVecs[num] + transform.position;
-            nfPoint.transform.localScale = new Vector3(0.05f, 0.05f, 1.0f);
+                nfPoint.SetActive(false);
 
-            nfPoint.SetActive(false);
+                nfMap.Add(lowerByte, nfPoint);
 
-            nfMap.Add(lowerByte, nfPoint);
+                // the big brother points
+                GameObject bbPoint = (GameObject)Instantiate(ptPrefab);
+                bbPoint.name = "IP(BB): " + entry.Value;
 
-            // the big brother points
-            GameObject bbPoint = (GameObject)Instantiate(ptPrefab);
-            bbPoint.name = "IP(BB): " + entry.Value;
+                bbPoint.transform.SetParent(layers[1].transform);
+                bbPoint.transform.localPosition = tmpVecs[num];
+                bbPoint.transform.localScale = new Vector3(0.05f, 0.05f, 1.0f);
 
-            bbPoint.transform.SetParent(transform);
-            bbPoint.transform.position = tmpVecs[num] + transform.position + bbOffset;
-            bbPoint.transform.localScale = new Vector3(0.05f, 0.05f, 1.0f);
+                bbPoint.SetActive(false);
 
-            bbPoint.SetActive(false);
-
-            bbMap.Add(lowerByte, bbPoint);
+                bbMap.Add(lowerByte, bbPoint);
 
 
-            // the IPS points
-            GameObject ipsPoint = (GameObject)Instantiate(ptPrefab);
-            ipsPoint.name = "IP(IPS): " + entry.Value;
+                // the IPS points
+                GameObject ipsPoint = (GameObject)Instantiate(ptPrefab);
+                ipsPoint.name = "IP(IPS): " + entry.Value;
 
-            ipsPoint.transform.SetParent(transform);
-            ipsPoint.transform.position = tmpVecs[num] + transform.position + ipsOffset;
-            ipsPoint.transform.localScale = new Vector3(0.05f, 0.05f, 1.0f);
+                ipsPoint.transform.SetParent(layers[2].transform);
+                ipsPoint.transform.localPosition = tmpVecs[num];
+                ipsPoint.transform.localScale = new Vector3(0.05f, 0.05f, 1.0f);
 
-            ipsPoint.SetActive(false);
+                ipsPoint.SetActive(false);
 
-            ipsMap.Add(lowerByte, ipsPoint);
+                ipsMap.Add(lowerByte, ipsPoint);
+            }
+            else
+            {
+                // server point
+                GameObject serverPoint = (GameObject)Instantiate(ptPrefab);
+                serverPoint.name = "IP(Server): " + entry.Value;
+
+                serverPoint.transform.SetParent(layers[3].transform);
+                serverPoint.transform.localPosition = tmpVecs[num];
+                serverPoint.transform.localScale = new Vector3(0.05f, 0.05f, 1.0f);
+
+                serverPoint.SetActive(false);
+
+                nfMap.Add(lowerByte, serverPoint);
+            }
+            
 
 
 
@@ -289,8 +357,6 @@ public class SubnetMapping : MonoBehaviour {
 
     public void activateIPSNodes(Dictionary<long, ipsDataStruct> map)
     {
-        Debug.Log("Trying to show " + map.Count + " IPS nodes");
-
         foreach (KeyValuePair<int, GameObject> entry in ipsMap)
         {
             entry.Value.SetActive(false);

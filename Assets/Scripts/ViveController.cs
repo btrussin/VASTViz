@@ -38,7 +38,14 @@ public class ViveController : SteamVR_TrackedObject
     public GameObject otherController;
     ViveController otherControllerScript;
 
+    public GameObject accordianObj;
+    AccordianManager accordianManager;
+
     bool hasController = false;
+    bool inAnimation = false;
+
+    public GameObject playLabel;
+    public GameObject pauseLabel;
 
     // Use this for initialization
     void Start () {
@@ -54,6 +61,8 @@ public class ViveController : SteamVR_TrackedObject
 
         sqlConnClass = sqlConnObject.GetComponent<TestSQLiteConn>();
         currSliderScript = timelineObject.GetComponent<TimelineScript>();
+
+        accordianManager = accordianObj.GetComponent<AccordianManager>();
 
     }
 	
@@ -110,10 +119,23 @@ public class ViveController : SteamVR_TrackedObject
                 }
             }
 
+            
             if ((state.ulButtonPressed & SteamVR_Controller.ButtonMask.Grip) != 0 &&
                 (prevState.ulButtonPressed & SteamVR_Controller.ButtonMask.Grip) == 0)
             {
                 // hit the grip button
+                Vector3 dir = transform.forward - transform.up;
+                dir.y = 0.0f;
+                dir.Normalize();
+                Vector3 pos = transform.position;
+
+                accordianManager.activate(pos, dir);
+            }
+
+            else if((state.ulButtonPressed & SteamVR_Controller.ButtonMask.Grip) == 0 && 
+                (prevState.ulButtonPressed & SteamVR_Controller.ButtonMask.Grip) != 0)
+            {
+                accordianManager.deactivate();
             }
 
 
@@ -143,7 +165,17 @@ public class ViveController : SteamVR_TrackedObject
 
             }
 
-            if ((state.ulButtonPressed & SteamVR_Controller.ButtonMask.Touchpad) != 0)
+            if ((state.ulButtonPressed & SteamVR_Controller.ButtonMask.Touchpad) != 0 && 
+                (prevState.ulButtonPressed & SteamVR_Controller.ButtonMask.Touchpad) == 0)
+            {
+                if (Mathf.Abs(state.rAxis0.y) >= Mathf.Abs(state.rAxis0.x) && state.rAxis0.y < 0.0f )
+                {
+                    togglePlayAnimation();
+                    otherControllerScript.togglePlayAnimation();
+                }
+            }
+
+            else if ((state.ulButtonPressed & SteamVR_Controller.ButtonMask.Touchpad) != 0)
             {
                 //Vector2 touchPos = new Vector2(state.rAxis0.x, state.rAxis0.y);
 
@@ -155,13 +187,37 @@ public class ViveController : SteamVR_TrackedObject
 
                     float currPos = sqlConnClass.getTimeSliceFloat();
                     currSliderScript.updateSliderPosition(currPos);
-
-
                 }
+                
+
             }
 
 
             prevState = state;
+        }
+
+
+        if ((state.ulButtonPressed & SteamVR_Controller.ButtonMask.Grip) != 0)
+        {
+            accordianManager.tryToAdjustDistance(transform.position);
+        }
+    }
+
+    public void togglePlayAnimation()
+    {
+        inAnimation = !inAnimation;
+
+        if( inAnimation )
+        {
+            pauseLabel.SetActive(true);
+            playLabel.SetActive(false);
+            sqlConnClass.startAnimation();
+        }
+        else
+        {
+            playLabel.SetActive(true);
+            pauseLabel.SetActive(false);
+            sqlConnClass.stopAnimation();
         }
     }
 
