@@ -134,7 +134,7 @@ public class SubnetMapping : MonoBehaviour {
         return tmpVecs;
     }
 
-    private Vector3[] getSubnetVectors(int width, int height)
+    private Vector3[] getSubnetVectors(int width, int height, bool randOffset = true)
     {
         Vector3[] tmpVecs = new Vector3[height * width];
 
@@ -146,14 +146,14 @@ public class SubnetMapping : MonoBehaviour {
         float currW = -0.5f;
 
         Random rand = new Random();
-        Vector2 whR;
+        Vector2 whR = new Vector2(0.0f, 0.0f);
 
         for (int i = 0; i < height; i++)
         {
             currW = -0.5f;
             for (int j = 0; j < width; j++, num++)
             {
-                whR = Random.insideUnitCircle;
+                if( randOffset ) whR = Random.insideUnitCircle;
 
                 tmpVecs[num] = new Vector3(currW + whR.x * w, currH + whR.y * h, 0.0f);
                 currW += w;
@@ -196,7 +196,7 @@ public class SubnetMapping : MonoBehaviour {
         }
         else
         {
-            tmpVecs = getSubnetVectors(vecLayoutWidth, vecLayoutHeight);
+            tmpVecs = getSubnetVectors(vecLayoutWidth, vecLayoutHeight, true);
         }
 
         int num = 0;

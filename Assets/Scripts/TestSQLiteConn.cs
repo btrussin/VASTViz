@@ -60,7 +60,7 @@ public class TestSQLiteConn : MonoBehaviour {
     int[] timesliceBBCounts;
     int[] timesliceIPSCounts;
 
-    int numMinutesPerSlice = 5;
+    int numMinutesPerSlice = 10;
     int numSecondsPerSlice;
 
     bool queryActive = false;
