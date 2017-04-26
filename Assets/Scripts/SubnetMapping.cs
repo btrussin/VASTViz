@@ -7,6 +7,8 @@ public class SubnetMapping : MonoBehaviour {
 
     //public string pointPrefabPath = "Prefabs/PointPrefab.prefab"; //Set by default. May be changed in the editor.
     public GameObject ptPrefab = null;
+    public GameObject bgStatusPrefab = null;
+    public GameObject bgHighlightPrefab = null;
 
     /*
     layer[0]: netflow layer
@@ -14,11 +16,19 @@ public class SubnetMapping : MonoBehaviour {
     layer[2]: ips layer
     layer[3]: server layer
     */
-    public GameObject[] layers = new GameObject[4];
+
+    Color bbColorGray = new Color(0.7f, 0.7f, 0.7f, 0.15f);
+    Color bbColorGreen = new Color(0.1f, 0.9f, 0.1f, 0.15f);
+    Color bbColorYellow = new Color(0.9f, 0.9f, 0.1f, 0.15f);
+    Color bbColorRed = new Color(0.9f, 0.1f, 0.1f, 0.15f);
+    Color bbColorBlue = new Color(0.1f, 0.1f, 0.9f, 0.15f);
+
+    public GameObject[] layers = new GameObject[3];
    
     public GameObject bgQuad;
 
-    
+
+    Dictionary<int, GameObject> bgStatusMap = new Dictionary<int, GameObject>();
 
     Dictionary<int, GameObject> nfMap = new Dictionary<int, GameObject>();
     Dictionary<int, GameObject> bbMap = new Dictionary<int, GameObject>();
@@ -100,7 +110,7 @@ public class SubnetMapping : MonoBehaviour {
         if (dist < 0.0f) return;
         currLayerDist = dist;
 
-        bgQuad.transform.localPosition = new Vector3(0.0f, 0.0f, 0.1f);
+        bgQuad.transform.localPosition = new Vector3(0.0f, 0.0f, 0.0f);
 
         float offset = -currLayerDist;
         for (int i = 0; i < layers.Length; i++)
@@ -109,6 +119,32 @@ public class SubnetMapping : MonoBehaviour {
             offset -= currLayerDist;
         }
 
+    }
+
+    private Vector3[] getBaseVectors(int width, int height)
+    {
+        Vector3[] tmpVecs = new Vector3[height * width];
+
+        int num = 0;
+        float w = 1.0f / (float)width;
+        float h = 1.0f / (float)height;
+
+        float currH = 0.5f;
+        float currW = -0.5f;
+
+        for (int i = 0; i < height; i++)
+        {
+            currW = -0.5f;
+            for (int j = 0; j < width; j++, num++)
+            {
+                tmpVecs[num] = new Vector3(currW, currH, 0.0f);
+                currW += w;
+            }
+
+            currH -= h;
+        }
+
+        return tmpVecs;
     }
 
     private Vector3[] getSubnetVectorsWalk(int numPoints)
@@ -189,6 +225,10 @@ public class SubnetMapping : MonoBehaviour {
         }
 
         Vector3[] tmpVecs;
+        Vector3[] baseVecs = getBaseVectors(vecLayoutWidth, vecLayoutHeight);
+
+        bool doBgSquares = true;
+
 
         if(useRandomWalk)
         {
@@ -213,6 +253,34 @@ public class SubnetMapping : MonoBehaviour {
             lowerByte = (int)(entry.Key & 0xFFFF);
             currInfo = entry.Value;
 
+            if( doBgSquares )
+            {
+                GameObject bgObj = (GameObject)Instantiate(bgStatusPrefab);
+                bgObj.name = "Status: " + currInfo.ipAddress;
+                bgObj.transform.SetParent(gameObject.transform);
+                bgObj.transform.localPosition = baseVecs[num];
+
+                GameObject bgHlObj = (GameObject)Instantiate(bgHighlightPrefab);
+                bgHlObj.name = "Status (HL): " + currInfo.ipAddress;
+                bgHlObj.transform.SetParent(gameObject.transform);
+                bgHlObj.transform.localPosition = baseVecs[num] + new Vector3(0.0f, 0.0f, 0.001f);
+
+                MeshRenderer mRend = bgObj.GetComponent<MeshRenderer>();
+                mRend.material.color = bbColorGray;
+
+                NodeStatus nStatus = mRend.GetComponent<NodeStatus>();
+                nStatus.currIpInfo = currInfo;
+                nStatus.bgHighlightQuad = bgHlObj;
+
+                bgObj.SetActive(true);
+                bgHlObj.SetActive(false);
+
+                bgStatusMap.Add(lowerByte, bgObj);
+            }
+
+
+
+
             if( currInfo.type == ipType.WORKSTATION )
             {
                 // the network flow points
@@ -227,24 +295,11 @@ public class SubnetMapping : MonoBehaviour {
 
                 nfMap.Add(lowerByte, nfPoint);
 
-                // the big brother points
-                GameObject bbPoint = (GameObject)Instantiate(ptPrefab);
-                bbPoint.name = "IP(BB): " + entry.Value;
-
-                bbPoint.transform.SetParent(layers[1].transform);
-                bbPoint.transform.localPosition = tmpVecs[num];
-                bbPoint.transform.localScale = new Vector3(0.05f, 0.05f, 1.0f);
-
-                bbPoint.SetActive(false);
-
-                bbMap.Add(lowerByte, bbPoint);
-
-
                 // the IPS points
                 GameObject ipsPoint = (GameObject)Instantiate(ptPrefab);
                 ipsPoint.name = "IP(IPS): " + entry.Value;
 
-                ipsPoint.transform.SetParent(layers[2].transform);
+                ipsPoint.transform.SetParent(layers[1].transform);
                 ipsPoint.transform.localPosition = tmpVecs[num];
                 ipsPoint.transform.localScale = new Vector3(0.05f, 0.05f, 1.0f);
 
@@ -258,7 +313,7 @@ public class SubnetMapping : MonoBehaviour {
                 GameObject serverPoint = (GameObject)Instantiate(ptPrefab);
                 serverPoint.name = "IP(Server): " + entry.Value;
 
-                serverPoint.transform.SetParent(layers[3].transform);
+                serverPoint.transform.SetParent(layers[2].transform);
                 serverPoint.transform.localPosition = tmpVecs[num];
                 serverPoint.transform.localScale = new Vector3(0.05f, 0.05f, 1.0f);
 
@@ -311,6 +366,55 @@ public class SubnetMapping : MonoBehaviour {
 
         float scale = maxRange * 0.15f + minRange * 0.85f;
 
+        foreach (KeyValuePair<int, GameObject> entry in bgStatusMap)
+        {
+            g = entry.Value;
+            mat = g.GetComponent<MeshRenderer>().material;
+            mat.color = bbColorGray;
+        }
+
+        int lowerByte;
+
+        scale = maxRange * 0.75f + minRange * 0.25f;
+
+        foreach (KeyValuePair<long, bbDataStruct> entry in map)
+        {
+            lowerByte = (int)(entry.Key & 0xFFFF);
+            if (bgStatusMap.TryGetValue(lowerByte, out g))
+            {
+                
+                mat = g.GetComponent<MeshRenderer>().material;
+                switch (entry.Value.status)
+                {
+                    case 3:
+                        mat.color = bbColorRed;
+                        break;
+                    case 2:
+                        mat.color = bbColorYellow;
+                        break;
+                    case 1:
+                        mat.color = bbColorGreen;
+                        break;
+                    default:
+                        //g.SetActive(false);
+                        mat.color = bbColorBlue;
+                        break;
+                }
+            }
+        }
+    }
+
+
+
+    public void activateBBNodes_bak(Dictionary<long, bbDataStruct> map)
+    {
+        if (map.Count < 1) return;
+
+        Material mat;
+        GameObject g;
+
+        float scale = maxRange * 0.15f + minRange * 0.85f;
+
         foreach (KeyValuePair<int, GameObject> entry in bbMap)
         {
             g = entry.Value;
@@ -321,9 +425,9 @@ public class SubnetMapping : MonoBehaviour {
         }
 
         int lowerByte;
-        
 
-        
+
+
 
         scale = maxRange * 0.75f + minRange * 0.25f;
 
@@ -336,7 +440,7 @@ public class SubnetMapping : MonoBehaviour {
                 g.SetActive(true);
 
                 mat = g.GetComponent<MeshRenderer>().material;
-                switch(entry.Value.status)
+                switch (entry.Value.status)
                 {
                     case 3:
                         mat.color = Color.red;
@@ -359,7 +463,7 @@ public class SubnetMapping : MonoBehaviour {
     {
         foreach (KeyValuePair<int, GameObject> entry in ipsMap)
         {
-            entry.Value.SetActive(false);
+            entry.Value.SetActive(false);  
         }
 
         int lowerByte;

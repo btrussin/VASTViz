@@ -15,6 +15,9 @@ public class ViveController : SteamVR_TrackedObject
     float rayAngle = 60.0f;
 
     int sliderMask;
+    int nodesMask;
+    int moveScaleMask;
+    int playAreaMask;
 
     Vector3[] linePts = new Vector3[2];
 
@@ -47,6 +50,19 @@ public class ViveController : SteamVR_TrackedObject
     public GameObject playLabel;
     public GameObject pauseLabel;
 
+    public GameObject nodeStatusObject;
+    public GameObject nodeStatusText;
+    GameObject currNodeObject = null;
+
+    GameObject currMoveQuad = null;
+    GameObject currScaleQuad = null;
+    bool activeScale = false;
+    bool activeMove = false;
+    MoveScaleManager activeMoveScaleManager = null;
+
+    public GameObject actionAreaObject;
+    ActionAreaManager actionAreaManager;
+
     // Use this for initialization
     void Start () {
 
@@ -54,7 +70,13 @@ public class ViveController : SteamVR_TrackedObject
 
         otherControllerScript = otherController.GetComponent<ViveController>();
 
+        actionAreaManager = actionAreaObject.GetComponent<ActionAreaManager>();
+
         sliderMask = 1 << LayerMask.NameToLayer("slider");
+        nodesMask = 1 << LayerMask.NameToLayer("nodes");
+        moveScaleMask = 1 << LayerMask.NameToLayer("moveScale");
+        playAreaMask = 1 << LayerMask.NameToLayer("playArea");
+
         lineRend = projLineObj.GetComponent<LineRenderer>();
 
         linePts[0] = Vector3.zero;
@@ -73,11 +95,15 @@ public class ViveController : SteamVR_TrackedObject
         deviceRay.origin = transform.position;
         deviceRay.direction = rayRotation * transform.forward;
 
-        tryHitSlider();
+        // try to hit the various interaction objects
+        projLineObj.SetActive(false);
+        tryHitObjects();
 
         updateControllerStates();
 
         if (moveSlider) updateSliderPosition();
+        else if (activeMove) activeMoveScaleManager.updateMove(transform, deviceRay.origin);
+        else if( activeScale) activeMoveScaleManager.updateScale(deviceRay);
 
     }
 
@@ -138,6 +164,83 @@ public class ViveController : SteamVR_TrackedObject
                 accordianManager.deactivate();
             }
 
+            // press trigger all the way
+
+
+
+            // trigger is being pressed
+            if ( (state.ulButtonPressed & SteamVR_Controller.ButtonMask.Trigger) != 0)
+            {
+                if (onSlider)
+                {
+
+                    if (state.rAxis1.x >= 0.85f)
+                    {
+                        moveSlider = true;
+                        currSliderScript.activateControlLine();
+                    }
+                    else
+                    {
+                        moveSlider = false;
+                        currSliderScript.deactivateControlLine();
+
+                        Vector3 currPos = currSliderScript.getCurrentPosition();
+                        sqlConnClass.setTimeSlice(currPos.x);
+                    }
+                }
+                else if (activeScale)
+                {
+                    if (state.rAxis1.x < 1.0f && prevState.rAxis1.x >= 1.0f)
+                    {
+                        // end scaling
+
+                        activeMoveScaleManager.endScale();
+                        activeScale = false;
+                    }
+                }
+                else if (activeMove)
+                {
+                    if (state.rAxis1.x < 1.0f && prevState.rAxis1.x >= 1.0f)
+                    {
+                        // end scaling
+
+                        activeMoveScaleManager.endMove();
+                        activeMove = false;
+                    }
+                }
+                else if (currScaleQuad != null)
+                {
+                    if (prevState.rAxis1.x < 1.0f && state.rAxis1.x >= 1.0f)
+                    {
+                        // start scaling
+                        activeMoveScaleManager = currScaleQuad.transform.parent.gameObject.GetComponent<MoveScaleManager>();
+                        activeScale = true;
+
+                        activeMoveScaleManager.initScale();
+                    }
+
+                }
+                else if (currMoveQuad != null)
+                {
+                    if (prevState.rAxis1.x < 1.0f && state.rAxis1.x >= 1.0f)
+                    {
+                        // start move
+                        activeMoveScaleManager = currMoveQuad.transform.parent.gameObject.GetComponent<MoveScaleManager>();
+                        activeMove = true;
+
+                        activeMoveScaleManager.initMove(transform, deviceRay.origin);
+                    }
+                }
+                else if( currNodeObject != null && prevState.rAxis1.x < 1.0f && state.rAxis1.x >= 1.0f)
+                {
+
+                    NodeStatus ns = currNodeObject.GetComponent<NodeStatus>();
+                    actionAreaManager.addActiveNode(ns);
+                }
+            }
+
+                
+
 
             if ((state.ulButtonPressed & SteamVR_Controller.ButtonMask.Trigger) != 0)
             {
@@ -173,13 +276,7 @@ public class ViveController : SteamVR_TrackedObject
                     togglePlayAnimation();
                     otherControllerScript.togglePlayAnimation();
                 }
-            }
-
-            else if ((state.ulButtonPressed & SteamVR_Controller.ButtonMask.Touchpad) != 0)
-            {
-                //Vector2 touchPos = new Vector2(state.rAxis0.x, state.rAxis0.y);
-
-                if( Mathf.Abs(state.rAxis0.x) >= Mathf.Abs(state.rAxis0.y))
+                else
                 {
                     int currTime = sqlConnClass.getTimeSliceIdx();
                     if (state.rAxis0.x < 0.0f) sqlConnClass.setTimeSlice(currTime - 1);
@@ -188,9 +285,9 @@ public class ViveController : SteamVR_TrackedObject
                     float currPos = sqlConnClass.getTimeSliceFloat();
                     currSliderScript.updateSliderPosition(currPos);
                 }
-                
-
             }
+
+           
 
 
             prevState = state;
@@ -201,6 +298,11 @@ public class ViveController : SteamVR_TrackedObject
         {
             accordianManager.tryToAdjustDistance(transform.position);
         }
+    }
+
+    void handleTriggerClick()
+    {
+
     }
 
     public void togglePlayAnimation()
@@ -221,12 +323,13 @@ public class ViveController : SteamVR_TrackedObject
         }
     }
 
-    void tryHitSlider()
+    void tryHitObjects()
     {
-        projLineObj.SetActive(false);
-
         RaycastHit hitInfo;
 
+        bool stopSearching = false;
+
+        // try for timeline slider
         if (Physics.Raycast(deviceRay.origin, deviceRay.direction, out hitInfo, 30.0f, sliderMask))
         {
             projLineObj.SetActive(true);
@@ -243,14 +346,191 @@ public class ViveController : SteamVR_TrackedObject
 
                 currSliderScript.hightlightControlLine();
             }
+
+            stopSearching = true;
         }
         else if(!moveSlider)
         {
             onSlider = false;
             currSliderScript.deactivateControlLine();
         }
-        
-       
+
+        if (stopSearching) return;
+
+        NodeStatus ns;
+
+
+
+        // try for play area
+        if (Physics.Raycast(deviceRay.origin, deviceRay.direction, out hitInfo, 30.0f, playAreaMask))
+        {
+            projLineObj.SetActive(true);
+            linePts[0] = deviceRay.origin;
+            linePts[1] = deviceRay.GetPoint(hitInfo.distance);
+            lineRend.SetPositions(linePts);
+
+            GameObject obj = hitInfo.collider.gameObject;
+            if( obj.name.Equals("listLabel") )
+            {
+                ns = obj.transform.parent.gameObject.GetComponent<ListLabelManager>().nodeStatus;
+                if( ns != null )
+                {
+                    Debug.Log("Hit Label: " + ns.currIpInfo.ipAddress);
+                }
+            }
+            else if (obj.name.Equals("closeQuad"))
+            {
+
+            }
+
+
+            stopSearching = true;
+        }
+
+        if (stopSearching) return;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // try for node info
+        if (Physics.Raycast(deviceRay.origin, deviceRay.direction, out hitInfo, 30.0f, nodesMask))
+        {
+            GameObject hitObj = hitInfo.collider.gameObject;
+            projLineObj.SetActive(true);
+            linePts[0] = deviceRay.origin;
+            linePts[1] = deviceRay.GetPoint(hitInfo.distance);
+            lineRend.SetPositions(linePts);
+
+            if (currNodeObject != hitObj)
+            {
+                if (currNodeObject == null)
+                {
+                    showNodeInfo();
+                }
+                else
+                {
+                    ns = currNodeObject.GetComponent<NodeStatus>();
+                    ns.unhighlightNode();
+                }
+
+                currNodeObject = hitObj;
+                ns = hitObj.GetComponent<NodeStatus>();
+                ns.highlightNode();
+                updateNodeInfo(ns);
+            }
+
+            stopSearching = true;
+
+        }
+        else if (currNodeObject != null)
+        {
+            ns = currNodeObject.GetComponent<NodeStatus>();
+            ns.unhighlightNode();
+            currNodeObject = null;
+            hideNodeInfo();
+        }
+
+        if (stopSearching) return;
+
+        // try for move or scale functions
+        if (Physics.Raycast(deviceRay.origin, deviceRay.direction, out hitInfo, 30.0f, moveScaleMask))
+        {
+            GameObject hitObj = hitInfo.collider.gameObject;
+            if (hitObj.name.Equals("moveQuad"))
+            {
+                currMoveQuad = hitObj;
+                currScaleQuad = null;
+            }
+            else if (hitObj.name.Equals("scaleQuad"))
+            {
+                currMoveQuad = null;
+                currScaleQuad = hitObj;
+            }
+
+
+            projLineObj.SetActive(true);
+            linePts[0] = deviceRay.origin;
+            linePts[1] = deviceRay.GetPoint(hitInfo.distance);
+            lineRend.SetPositions(linePts);
+            currSliderDist = hitInfo.distance;
+
+            stopSearching = true;
+        }
+        else if( activeScale || activeMove )
+        {
+            projLineObj.SetActive(true);
+            linePts[0] = deviceRay.origin;
+            linePts[1] = deviceRay.GetPoint(currSliderDist);
+            lineRend.SetPositions(linePts);
+        }
+
+    }
+
+    void updateNodeInfo(NodeStatus nodeStatus)
+    {
+        TextMesh tm = nodeStatusText.GetComponent<TextMesh>();
+        string txt = "" + nodeStatus.currIpInfo.ipAddress;
+        switch(nodeStatus.currIpInfo.type)
+        {
+            case ipType.SERVER:
+                txt += " (Server)";
+                break;
+            case ipType.WORKSTATION:
+                txt += " (WS)";
+                break;
+        }
+
+        int numHits, min;
+
+        long ipNum = TestSQLiteConn.getIpNumFromString(nodeStatus.currIpInfo.ipAddress);
+
+        sqlConnClass.getNFTrafficCountForNode(ipNum, out numHits, out min);
+        txt += "\nTime Increment: " + min + (min > 1 ? " minutes" : " minute");
+        txt += "\nNetflow Hits: " + numHits;
+
+        int status;
+        sqlConnClass.getMostRecentBigBrotherStatusForNode(ipNum, out status);
+
+        txt += "\nBigBrother Status: ";
+
+        switch(status)
+        {
+            case 1:
+                txt += "Good";
+                break;
+            case 2:
+                txt += "Warning";
+                break;
+            case 3:
+                txt += "Problem";
+                break;
+            default:
+                txt += "[no report]";
+                break;
+        }
+
+        tm.text = txt;
+    }
+
+    void showNodeInfo()
+    {
+        nodeStatusObject.SetActive(true);
+    }
+
+    void hideNodeInfo()
+    {
+        nodeStatusObject.SetActive(false);
     }
 
 }

@@ -121,6 +121,9 @@ public class TestSQLiteConn : MonoBehaviour {
 
         dbconn.Open(); //Open connection to the database.
 
+        /* DELETE NEXT LINE */
+        //temp();
+
         numSecondsPerSlice = numMinutesPerSlice * 60;
 
         setupAllSubnets();
@@ -156,6 +159,17 @@ public class TestSQLiteConn : MonoBehaviour {
         currTimeIdx = 0;
 
         getVals();
+
+    }
+
+    void temp()
+    {
+        IDbCommand cmd = dbconn.CreateCommand();
+        string sql = "REINDEX time_recIpNum_idx;";
+        
+        cmd.CommandText = sql;
+
+        cmd.ExecuteNonQuery();
 
     }
 
@@ -253,6 +267,9 @@ public class TestSQLiteConn : MonoBehaviour {
                         try
                         {
                             ipAddress = dataReader.GetString(0);
+
+                            if( ipAddress == null || ipAddress.Length < 7 ) continue;
+
                             ipNum = dataReader.GetInt64(1);
                             statusVal = dataReader.GetInt32(2);
 
@@ -454,12 +471,15 @@ public class TestSQLiteConn : MonoBehaviour {
                     timesliceNFCounts[i] = reader.GetInt32(0);
                 }
 
+
             }
 
             endTime = DateTime.Now.TimeOfDay;
 
+            Vector3 offset = new Vector3(0.0f, 0.0f, -0.02f);
+
             TimelineScript timelineScript = timeline.GetComponent<TimelineScript>();
-            timelineScript.createLines(timesliceNFCounts, Color.white, Vector3.zero);
+            timelineScript.createLines(timesliceNFCounts, Color.white, offset);
 
         }
 
@@ -510,7 +530,7 @@ public class TestSQLiteConn : MonoBehaviour {
 
             endTime = DateTime.Now.TimeOfDay;
 
-            Vector3 offset = new Vector3(0.0f, 0.0f, -0.02f);
+            Vector3 offset = new Vector3(0.0f, 0.0f, -0.04f);
 
             TimelineScript timelineScript = timeline.GetComponent<TimelineScript>();
             timelineScript.createLines(timesliceBBCounts, Color.red, offset);
@@ -560,7 +580,7 @@ public class TestSQLiteConn : MonoBehaviour {
 
             endTime = DateTime.Now.TimeOfDay;
 
-            Vector3 offset = new Vector3(0.0f, 0.0f, -0.04f);
+            Vector3 offset = new Vector3(0.0f, 0.0f, 0.0f);
 
             TimelineScript timelineScript = timeline.GetComponent<TimelineScript>();
             timelineScript.createLines(timesliceIPSCounts, Color.yellow, offset);
@@ -711,38 +731,7 @@ public class TestSQLiteConn : MonoBehaviour {
 
 
 
-        /*
-        string[] lines = System.IO.File.ReadAllLines(@"C:\\Users\\btrus\\Documents\\VAST\\sqlite\\uniqueIPsBySubnet.txt");
-        char[] sep = { '|' };
-
-        long ipNum;
-
-        foreach ( string line in lines )
-        {
-            string[] parts = line.Split(sep);
-            if (parts.Length != 3)
-            {
-                Debug.Log("Parts has " + parts.Length + " things in it");
-                continue;
-            }
-            ipNum = Int64.Parse(parts[1]);
-
-            if ( parts[0].CompareTo("1") == 0 )
-            {
-                subnetMaps[0].Add(ipNum, parts[2]);
-            }
-            else if (parts[0].CompareTo("2") == 0)
-            {
-                subnetMaps[1].Add(ipNum, parts[2]);
-            }
-            else if (parts[0].CompareTo("3") == 0)
-            {
-                subnetMaps[2].Add(ipNum, parts[2]);
-            }
-
-        }
-        */
-
+       
     }
 
     public static long getIpNumFromString(string s)
@@ -763,5 +752,110 @@ public class TestSQLiteConn : MonoBehaviour {
     {
         dbconn.Close();
         dbconn = null;
+    }
+
+    public void getNFTrafficCountForNode(string ipAddress, out int numHits, out int numMinutes)
+    {
+        long ipNum = getIpNumFromString(ipAddress);
+        getNFTrafficCountForNode(ipNum, out numHits, out numMinutes);
+    }
+
+    public void getNFTrafficCountForNode(long ipNum, out int numHits, out int numMinutes)
+    {
+        numHits = 0;
+        numMinutes = numMinutesPerSlice;
+
+        IDbCommand cmd = dbconn.CreateCommand();
+
+        string sql = "";
+        string tableName = "networkflow";
+
+        if (numMinutesPerSlice % 60 == 0) tableName = "nfipcount_60";
+        else if (numMinutesPerSlice % 30 == 0) tableName = "nfipcount_30";
+        else if (numMinutesPerSlice % 10 == 0) tableName = "nfipcount_10";
+        else if (numMinutesPerSlice % 5 == 0) tableName = "nfipcount_5";
+        else tableName = "nfipcount_1";
+
+        sql = "SELECT COUNT(*) FROM " + tableName + " WHERE TimeSeconds>=" + timeSlices[currTimeIdx] + 
+            " AND TimeSeconds<" + timeSlices[currTimeIdx + 1] + 
+            " AND ipNum = " + ipNum + ";";
+        cmd.CommandText = sql;
+
+        IDataReader reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            numHits += reader.GetInt32(0);
+        }
+
+        reader.Close();
+    }
+
+    public void getMostRecentBigBrotherStatusForNode(string ipAddress, out int status)
+    {
+        long ipNum = getIpNumFromString(ipAddress);
+
+        getMostRecentBigBrotherStatusForNode(ipNum, out status);
+    }
+
+    public void getMostRecentBigBrotherStatusForNode(long ipNum, out int status)
+    {
+
+        IDbCommand cmd = dbconn.CreateCommand();
+
+        long lastTime = -1;
+        status = 0;
+
+        string sql;
+        if(currTimeIdx > 9)
+        {
+            sql = "SELECT MAX(currenttime) from bigbrother WHERE currenttime>= " + timeSlices[currTimeIdx - 10] +
+                " AND currenttime<=" + timeSlices[currTimeIdx + 1] +
+                " AND recIpNum = " + ipNum + "; ";
+        }
+        else
+        {
+            sql = "SELECT MAX(currenttime) from bigbrother WHERE currenttime<= " + timeSlices[currTimeIdx + 1] + " AND recIpNum = " + ipNum + "; ";
+        }
+        
+        cmd.CommandText = sql;
+
+
+        IDataReader reader = cmd.ExecuteReader();
+        if(reader.Read())
+        {
+            try
+            {
+                lastTime = reader.GetInt64(0);
+            }
+            catch (Exception e)
+            {
+                lastTime = -1;
+            }
+        }
+        reader.Close();
+
+        if( lastTime < 0 )
+        {
+            return;
+        }
+
+        sql = "SELECT statusNum from bigbrother WHERE currenttime= " + lastTime + " AND recIpNum = " + ipNum + ";";
+        cmd.CommandText = sql;
+
+        reader = cmd.ExecuteReader();
+
+        if (reader.Read())
+        {
+            try
+            {
+                status = reader.GetInt32(0);
+            }
+            catch (Exception e)
+            {
+                status = 0;
+            }
+        }
+
+
     }
 }
