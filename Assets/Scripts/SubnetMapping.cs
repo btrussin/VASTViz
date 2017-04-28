@@ -9,6 +9,7 @@ public class SubnetMapping : MonoBehaviour {
     public GameObject ptPrefab = null;
     public GameObject bgStatusPrefab = null;
     public GameObject bgHighlightPrefab = null;
+    public GameObject bgSelectedPrefab = null;
 
     /*
     layer[0]: netflow layer
@@ -17,11 +18,11 @@ public class SubnetMapping : MonoBehaviour {
     layer[3]: server layer
     */
 
-    Color bbColorGray = new Color(0.7f, 0.7f, 0.7f, 0.15f);
-    Color bbColorGreen = new Color(0.1f, 0.9f, 0.1f, 0.15f);
-    Color bbColorYellow = new Color(0.9f, 0.9f, 0.1f, 0.15f);
-    Color bbColorRed = new Color(0.9f, 0.1f, 0.1f, 0.15f);
-    Color bbColorBlue = new Color(0.1f, 0.1f, 0.9f, 0.15f);
+    public Color bbColorGray = new Color(0.7f, 0.7f, 0.7f, 0.1f);
+    public Color bbColorGreen = new Color(0.1f, 0.9f, 0.1f, 0.1f);
+    public Color bbColorYellow = new Color(0.9f, 0.9f, 0.1f, 0.1f);
+    public Color bbColorRed = new Color(0.9f, 0.1f, 0.1f, 0.1f);
+    public Color bbColorBlue = new Color(0.1f, 0.1f, 0.9f, 0.1f);
 
     public GameObject[] layers = new GameObject[3];
    
@@ -189,7 +190,7 @@ public class SubnetMapping : MonoBehaviour {
             currW = -0.5f;
             for (int j = 0; j < width; j++, num++)
             {
-                if( randOffset ) whR = Random.insideUnitCircle;
+                if( randOffset ) whR = Random.insideUnitCircle * 0.15f;
 
                 tmpVecs[num] = new Vector3(currW + whR.x * w, currH + whR.y * h, 0.0f);
                 currW += w;
@@ -265,15 +266,23 @@ public class SubnetMapping : MonoBehaviour {
                 bgHlObj.transform.SetParent(gameObject.transform);
                 bgHlObj.transform.localPosition = baseVecs[num] + new Vector3(0.0f, 0.0f, 0.001f);
 
+                GameObject bgSelObj = (GameObject)Instantiate(bgSelectedPrefab);
+                bgSelObj.name = "Status (SEL): " + currInfo.ipAddress;
+                bgSelObj.transform.SetParent(gameObject.transform);
+                bgSelObj.transform.localPosition = baseVecs[num] + new Vector3(0.0f, 0.0f, 0.001f);
+          
+
                 MeshRenderer mRend = bgObj.GetComponent<MeshRenderer>();
                 mRend.material.color = bbColorGray;
 
                 NodeStatus nStatus = mRend.GetComponent<NodeStatus>();
                 nStatus.currIpInfo = currInfo;
                 nStatus.bgHighlightQuad = bgHlObj;
+                nStatus.bgSelectedQuad = bgSelObj;
 
                 bgObj.SetActive(true);
                 bgHlObj.SetActive(false);
+                bgSelObj.SetActive(false);
 
                 bgStatusMap.Add(lowerByte, bgObj);
             }

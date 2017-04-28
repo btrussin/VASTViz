@@ -164,106 +164,24 @@ public class ViveController : SteamVR_TrackedObject
                 accordianManager.deactivate();
             }
 
-            // press trigger all the way
+            
 
 
 
             // trigger is being pressed
             if ( (state.ulButtonPressed & SteamVR_Controller.ButtonMask.Trigger) != 0)
             {
-                if (onSlider)
+                // trigger completely pressed
+                if (prevState.rAxis1.x < 1.0f && state.rAxis1.x >= 1.0f)
                 {
-
-                    if (state.rAxis1.x >= 0.85f)
-                    {
-                        moveSlider = true;
-                        currSliderScript.activateControlLine();
-                    }
-                    else
-                    {
-                        moveSlider = false;
-                        currSliderScript.deactivateControlLine();
-
-                        Vector3 currPos = currSliderScript.getCurrentPosition();
-                        sqlConnClass.setTimeSlice(currPos.x);
-                    }
+                    
+                    handleTriggerClick();
                 }
-                else if (activeScale)
+                // trigger released from completely pressed
+                else if (state.rAxis1.x < 1.0f && prevState.rAxis1.x >= 1.0f)
                 {
-                    if (state.rAxis1.x < 1.0f && prevState.rAxis1.x >= 1.0f)
-                    {
-                        // end scaling
-
-                        activeMoveScaleManager.endScale();
-                        activeScale = false;
-                    }
-                }
-                else if (activeMove)
-                {
-                    if (state.rAxis1.x < 1.0f && prevState.rAxis1.x >= 1.0f)
-                    {
-                        // end scaling
-
-                        activeMoveScaleManager.endMove();
-                        activeMove = false;
-                    }
-                }
-                else if (currScaleQuad != null)
-                {
-                    if (prevState.rAxis1.x < 1.0f && state.rAxis1.x >= 1.0f)
-                    {
-                        // start scaling
-                        activeMoveScaleManager = currScaleQuad.transform.parent.gameObject.GetComponent<MoveScaleManager>();
-                        activeScale = true;
-
-                        activeMoveScaleManager.initScale();
-                    }
-
-                }
-                else if (currMoveQuad != null)
-                {
-                    if (prevState.rAxis1.x < 1.0f && state.rAxis1.x >= 1.0f)
-                    {
-                        // start move
-                        activeMoveScaleManager = currMoveQuad.transform.parent.gameObject.GetComponent<MoveScaleManager>();
-                        activeMove = true;
-
-                        activeMoveScaleManager.initMove(transform, deviceRay.origin);
-                    }
-                }
-                else if( currNodeObject != null && prevState.rAxis1.x < 1.0f && state.rAxis1.x >= 1.0f)
-                {
-
-                    NodeStatus ns = currNodeObject.GetComponent<NodeStatus>();
-                    actionAreaManager.addActiveNode(ns);
-                }
-            }
-
                 
-
-
-            if ((state.ulButtonPressed & SteamVR_Controller.ButtonMask.Trigger) != 0)
-            {
-               
-                // trigger is being pressed
-                if (state.rAxis1.x >= 0.85f)
-                {
-                    if (onSlider)
-                    {
-                        moveSlider = true;
-                        currSliderScript.activateControlLine();
-                    }
-                }
-                else
-                {
-                    if (onSlider)
-                    {
-                        moveSlider = false;
-                        currSliderScript.deactivateControlLine();
-
-                        Vector3 currPos = currSliderScript.getCurrentPosition();
-                        sqlConnClass.setTimeSlice(currPos.x);
-                    }
+                    handleTriggerUnclick();
                 }
 
             }
@@ -287,8 +205,6 @@ public class ViveController : SteamVR_TrackedObject
                 }
             }
 
-           
-
 
             prevState = state;
         }
@@ -302,7 +218,102 @@ public class ViveController : SteamVR_TrackedObject
 
     void handleTriggerClick()
     {
+        if (onSlider)
+        {
+            moveSlider = true;
+            currSliderScript.activateControlLine();
+        }
+        else if (currScaleQuad != null)
+        {
+            // start scaling
+            activeMoveScaleManager = currScaleQuad.transform.parent.gameObject.GetComponent<MoveScaleManager>();
+            activeScale = true;
 
+            activeMoveScaleManager.initScale();
+        }
+        else if (currMoveQuad != null)
+        {
+            // start move
+            activeMoveScaleManager = currMoveQuad.transform.parent.gameObject.GetComponent<MoveScaleManager>();
+            activeMove = true;
+
+            activeMoveScaleManager.initMove(transform, deviceRay.origin);
+        }
+        else
+        {
+            RaycastHit hitInfo;
+
+            if (Physics.Raycast(deviceRay.origin, deviceRay.direction, out hitInfo, 30.0f, playAreaMask))
+            {
+                GameObject hitObj = hitInfo.collider.gameObject;
+
+                if (hitObj.name.Equals("moveQuad"))
+                {
+                    activeMoveScaleManager = hitObj.GetComponent<MoveScaleManager>();
+                    activeMove = true;
+
+                    activeMoveScaleManager.initMove(transform, deviceRay.origin);
+                }
+
+                else if (hitObj.name.Equals("listExpandQuad"))
+                {
+                    actionAreaManager.openNodeList();
+                }
+                else if (hitObj.name.Equals("closeActiveQuad"))
+                {
+                    actionAreaManager.closeNodeList();
+                }
+                else if (hitObj.name.Equals("closeQuad"))
+                {
+                    NodeStatus ns = hitObj.transform.parent.gameObject.GetComponent<ListLabelManager>().nodeStatus;
+                    actionAreaManager.removeActiveNode(ns);
+                    ns.unselectNode();
+                }
+
+                else if (hitObj.name.Equals("listLabel"))
+                {
+                    NodeStatus ns = hitObj.transform.parent.gameObject.GetComponent<ListLabelManager>().nodeStatus;
+                    actionAreaManager.activateSelectedNode(ns);
+                }
+            }
+
+            else if (Physics.Raycast(deviceRay.origin, deviceRay.direction, out hitInfo, 30.0f, nodesMask))
+            {
+                NodeStatus ns = currNodeObject.GetComponent<NodeStatus>();
+                actionAreaManager.addActiveNode(ns);
+                ns.selectNode();
+            }
+
+
+
+
+        }
+    }
+
+    void handleTriggerUnclick()
+    {
+        if (onSlider)
+        {
+            moveSlider = false;
+            currSliderScript.deactivateControlLine();
+
+            Vector3 currPos = currSliderScript.getCurrentPosition();
+            sqlConnClass.setTimeSlice(currPos.x);
+        }
+        else if (activeScale)
+        {
+            // end scaling
+            activeMoveScaleManager.endScale();
+            activeScale = false;
+            currScaleQuad = null;
+        }
+        else if (activeMove)
+        {
+            // end scaling
+            activeMoveScaleManager.endMove();
+            activeMove = false;
+            currMoveQuad = null;
+        }
     }
 
     public void togglePlayAnimation()
@@ -348,6 +359,10 @@ public class ViveController : SteamVR_TrackedObject
             }
 
             stopSearching = true;
+
+            currMoveQuad = null;
+            currScaleQuad = null;
+
         }
         else if(!moveSlider)
         {
@@ -375,7 +390,7 @@ public class ViveController : SteamVR_TrackedObject
                 ns = obj.transform.parent.gameObject.GetComponent<ListLabelManager>().nodeStatus;
                 if( ns != null )
                 {
-                    Debug.Log("Hit Label: " + ns.currIpInfo.ipAddress);
+                    
                 }
             }
             else if (obj.name.Equals("closeQuad"))
@@ -385,21 +400,12 @@ public class ViveController : SteamVR_TrackedObject
 
 
             stopSearching = true;
+
+            currMoveQuad = null;
+            currScaleQuad = null;
         }
 
         if (stopSearching) return;
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -431,6 +437,9 @@ public class ViveController : SteamVR_TrackedObject
             }
 
             stopSearching = true;
+
+            currMoveQuad = null;
+            currScaleQuad = null;
 
         }
         else if (currNodeObject != null)

@@ -80,7 +80,7 @@ public class TestSQLiteConn : MonoBehaviour {
     bool hasResultSets;
 
 
-    IDbConnection dbconn;
+    SqliteConnection dbconn;
     IDbCommand dbcmd = null;
     IDataReader dataReader = null;
 
@@ -98,7 +98,8 @@ public class TestSQLiteConn : MonoBehaviour {
     bool inAnimation = false;
 
     // Use this for initialization
-    void Start() {
+    void Start()
+    {
 
         iterTimeOffset = maxIterTime * 1000.0;
 
@@ -115,14 +116,16 @@ public class TestSQLiteConn : MonoBehaviour {
 
         //conn = "URI=file:" + Application.dataPath + "/vast.db";
 
-        Debug.Log("Trying to connect to: " + conn);
+        Debug.Log("Connecting to: " + conn);
 
-        dbconn = (IDbConnection)new SqliteConnection(conn);
+        dbconn = new SqliteConnection(conn);
 
         dbconn.Open(); //Open connection to the database.
 
         /* DELETE NEXT LINE */
         //temp();
+
+       
 
         numSecondsPerSlice = numMinutesPerSlice * 60;
 
@@ -748,10 +751,10 @@ public class TestSQLiteConn : MonoBehaviour {
         return result;
     }
 
-    private void OnDestroy()
+    void OnDestroy()
     {
         dbconn.Close();
-        dbconn = null;
+        //dbconn = null;
     }
 
     public void getNFTrafficCountForNode(string ipAddress, out int numHits, out int numMinutes)
