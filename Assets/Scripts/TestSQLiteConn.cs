@@ -74,6 +74,9 @@ public class TestSQLiteConn : MonoBehaviour {
     Dictionary<long, ipsDataStruct>[] currIPSIpsSeen = new Dictionary<long, ipsDataStruct>[3];
     Dictionary<long, ipsDataStruct>[] nextIPSIpsSeen = new Dictionary<long, ipsDataStruct>[3];
 
+
+    Dictionary<long, ipDataStruct> outOfNetIpsSeen = new Dictionary<long, ipDataStruct>();
+
     public double maxIterTime = 0.005;
     double iterTimeOffset;
 
@@ -159,9 +162,9 @@ public class TestSQLiteConn : MonoBehaviour {
 
 
 
-        currTimeIdx = 0;
+        currTimeIdx = -1;
 
-        getVals();
+        //getVals();
 
     }
 
@@ -179,7 +182,7 @@ public class TestSQLiteConn : MonoBehaviour {
     // Update is called once per frame
     void Update() {
 
-        if ((Input.GetKeyDown(KeyCode.Space) || inAnimation) && !queryActive)
+        if ((Input.GetKeyDown(KeyCode.Space) || inAnimation || currTimeIdx < 0 ) && !queryActive)
         {
             currTimeIdx++;
 
@@ -188,6 +191,7 @@ public class TestSQLiteConn : MonoBehaviour {
             TimelineScript ts = timeline.GetComponent<TimelineScript>();
             ts.updateSliderPosition((float)currTimeIdx / (float)timeSlices.Length);
 
+            Debug.Log("Getting DB Values");
             getVals();
 
 
@@ -217,6 +221,8 @@ public class TestSQLiteConn : MonoBehaviour {
             bbDataStruct tmpBbValue = new bbDataStruct();
             ipsDataStruct tmpIPSValue = new ipsDataStruct();
 
+            bool foundInSubnet = false;
+
             while (currTime < maxTime && hasResultSets)
             {
                 if (currDbDataType == dbDataType.NETWORK_FLOW)
@@ -229,11 +235,15 @@ public class TestSQLiteConn : MonoBehaviour {
                             ipNum = dataReader.GetInt64(1);
                             numTimesSeen = dataReader.GetInt32(2);
 
+                            foundInSubnet = false;
+
                             for (idx = 0; idx < 3; idx++)
                             {
                                 if (ipNum <= maxSubnetIpNum[idx] && ipNum >= minSubnetIpNum[idx])
                                 {
                                     //nextIpsSeen[idx].
+
+
 
                                     if (!nextNfIpsSeen[idx].TryGetValue(ipNum, out tmpNfValue))
                                     {
@@ -248,9 +258,20 @@ public class TestSQLiteConn : MonoBehaviour {
                                         tmpNfValue.numTimesSeen += numTimesSeen;
                                     }
 
+                                    foundInSubnet = true;
+
                                     break;
                                 }
                             }
+
+
+
+                            if(!foundInSubnet)
+                            {
+                                tmpNfValue = new ipDataStruct();
+                                tmpNfValue.ipAddress = ipAddress;
+                                outOfNetIpsSeen.Add(ipNum, tmpNfValue);
+                            } 
                         }
 
                         catch (System.InvalidCastException e)
@@ -295,7 +316,6 @@ public class TestSQLiteConn : MonoBehaviour {
                                     {
                                         if (statusVal > tmpBbValue.status) tmpBbValue.status = statusVal;
                                     }
-
                                     break;
                                 }
                             }
@@ -631,6 +651,8 @@ public class TestSQLiteConn : MonoBehaviour {
             nextIPSIpsSeen[i] = new Dictionary<long, ipsDataStruct>();
         }
 
+        outOfNetIpsSeen.Clear();
+
         if (dataReader != null)
         {
             dataReader.Close();
@@ -739,16 +761,24 @@ public class TestSQLiteConn : MonoBehaviour {
 
     public static long getIpNumFromString(string s)
     {
-        char[] sep = { '.' };
-        string[] parts = s.Split(sep);
+        try
+        {
+            char[] sep = { '.' };
+            string[] parts = s.Split(sep);
 
-        long result = Int64.Parse(parts[3]);
+            long result = Int64.Parse(parts[3]);
 
-        result += Int64.Parse(parts[2]) * 256;
-        result += Int64.Parse(parts[1]) * 256 * 256;
-        result += Int64.Parse(parts[0]) * 256 * 256 * 256;
+            result += Int64.Parse(parts[2]) * 256;
+            result += Int64.Parse(parts[1]) * 256 * 256;
+            result += Int64.Parse(parts[0]) * 256 * 256 * 256;
 
-        return result;
+            return result;
+        }
+        catch (Exception e)
+        {
+            Debug.Log(e.Message);
+            return -1;
+        }
     }
 
     void OnDestroy()
@@ -861,4 +891,59 @@ public class TestSQLiteConn : MonoBehaviour {
 
 
     }
+
+
+    public List<ipTimelineDetails> getDetailedNFTrafficForNode(string ipAddress)
+    {
+        List<ipTimelineDetails> results = new List<ipTimelineDetails>();
+
+        long ipNum = getIpNumFromString(ipAddress);
+        if (ipNum < 0)
+        {
+            return results;
+        }
+
+        IDbCommand cmd = dbconn.CreateCommand();
+
+        string sql = "";
+
+        int numMinInEachDirection = 60;
+
+        // go numMinInEachDirection in each direction +/- 1000 * 60 * numMinInEachDirection
+        long minTime = timeSlices[currTimeIdx] - 1000 * 60 * numMinInEachDirection;
+        long maxTime = timeSlices[currTimeIdx] + 1000 * 60 * numMinInEachDirection;
+
+        sql = "SELECT TimeSeconds, firstSeenSrcIp, firstSeenDestIp, srcIpNum, dstIpNum FROM networkflow WHERE TimeSeconds>=" + minTime +
+            " AND TimeSeconds<=" + maxTime +
+        " AND (srcIpNum = " + ipNum + " OR dstIpNum = " + ipNum + ");"; /* both condition */
+        //" AND srcIpNum = " + ipNum + ";"; /* src condition */
+        //" AND dstIpNum = " + ipNum + ";"; /* dst condition */
+        cmd.CommandText = sql;
+
+        IDataReader reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            ipTimelineDetails tmpData = new ipTimelineDetails();
+            tmpData.time = reader.GetDouble(0);
+            tmpData.srcIp = reader.GetString(1);
+            tmpData.dstIp = reader.GetString(2);
+            tmpData.srcIpNum = reader.GetInt64(3);
+            tmpData.dstIpNum = reader.GetInt64(4);
+
+            results.Add(tmpData);
+
+           
+        }
+
+        reader.Close();
+
+
+        return results;
+    }
+
+    public Dictionary<long, ipInfo>[] getSubnetMaps()
+    {
+        return subnetMaps;
+    }
+
 }

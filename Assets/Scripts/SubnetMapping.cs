@@ -7,9 +7,12 @@ public class SubnetMapping : MonoBehaviour {
 
     //public string pointPrefabPath = "Prefabs/PointPrefab.prefab"; //Set by default. May be changed in the editor.
     public GameObject ptPrefab = null;
+    public GameObject starPrefab = null;
     public GameObject bgStatusPrefab = null;
     public GameObject bgHighlightPrefab = null;
     public GameObject bgSelectedPrefab = null;
+
+    public GameObject nodeLinePrefab = null;
 
     /*
     layer[0]: netflow layer
@@ -204,7 +207,6 @@ public class SubnetMapping : MonoBehaviour {
 
     public void mapAllIps(Dictionary<long, ipInfo> map)
     {
-        
         int lowerByte;
 
         int numInMap = map.Count;
@@ -227,8 +229,6 @@ public class SubnetMapping : MonoBehaviour {
 
         Vector3[] tmpVecs;
         Vector3[] baseVecs = getBaseVectors(vecLayoutWidth, vecLayoutHeight);
-
-        bool doBgSquares = true;
 
 
         if(useRandomWalk)
@@ -254,86 +254,117 @@ public class SubnetMapping : MonoBehaviour {
             lowerByte = (int)(entry.Key & 0xFFFF);
             currInfo = entry.Value;
 
-            if( doBgSquares )
-            {
-                GameObject bgObj = (GameObject)Instantiate(bgStatusPrefab);
-                bgObj.name = "Status: " + currInfo.ipAddress;
-                bgObj.transform.SetParent(gameObject.transform);
-                bgObj.transform.localPosition = baseVecs[num];
+            // doBgSquares
+            GameObject bgObj = (GameObject)Instantiate(bgStatusPrefab);
+            bgObj.name = "Status: " + currInfo.ipAddress;
+            bgObj.transform.SetParent(gameObject.transform);
+            bgObj.transform.localPosition = baseVecs[num];
 
-                GameObject bgHlObj = (GameObject)Instantiate(bgHighlightPrefab);
-                bgHlObj.name = "Status (HL): " + currInfo.ipAddress;
-                bgHlObj.transform.SetParent(gameObject.transform);
-                bgHlObj.transform.localPosition = baseVecs[num] + new Vector3(0.0f, 0.0f, 0.001f);
+            GameObject bgHlObj = (GameObject)Instantiate(bgHighlightPrefab);
+            bgHlObj.name = "Status (HL): " + currInfo.ipAddress;
+            bgHlObj.transform.SetParent(gameObject.transform);
+            bgHlObj.transform.localPosition = baseVecs[num] + new Vector3(0.0f, 0.0f, 0.001f);
 
-                GameObject bgSelObj = (GameObject)Instantiate(bgSelectedPrefab);
-                bgSelObj.name = "Status (SEL): " + currInfo.ipAddress;
-                bgSelObj.transform.SetParent(gameObject.transform);
-                bgSelObj.transform.localPosition = baseVecs[num] + new Vector3(0.0f, 0.0f, 0.001f);
-          
-
-                MeshRenderer mRend = bgObj.GetComponent<MeshRenderer>();
-                mRend.material.color = bbColorGray;
-
-                NodeStatus nStatus = mRend.GetComponent<NodeStatus>();
-                nStatus.currIpInfo = currInfo;
-                nStatus.bgHighlightQuad = bgHlObj;
-                nStatus.bgSelectedQuad = bgSelObj;
-
-                bgObj.SetActive(true);
-                bgHlObj.SetActive(false);
-                bgSelObj.SetActive(false);
-
-                bgStatusMap.Add(lowerByte, bgObj);
-            }
+            GameObject bgSelObj = (GameObject)Instantiate(bgSelectedPrefab);
+            bgSelObj.name = "Status (SEL): " + currInfo.ipAddress;
+            bgSelObj.transform.SetParent(gameObject.transform);
+            bgSelObj.transform.localPosition = baseVecs[num] + new Vector3(0.0f, 0.0f, 0.001f);
 
 
+            MeshRenderer mRend = bgObj.GetComponent<MeshRenderer>();
+            mRend.material.color = bbColorGray;
 
+            NodeStatus nStatus = mRend.GetComponent<NodeStatus>();
+            nStatus.currIpInfo = currInfo;
+            nStatus.bgHighlightQuad = bgHlObj;
+            nStatus.bgSelectedQuad = bgSelObj;
 
-            if( currInfo.type == ipType.WORKSTATION )
+            bgObj.SetActive(true);
+            bgHlObj.SetActive(false);
+            bgSelObj.SetActive(false);
+
+            bgStatusMap.Add(lowerByte, bgObj);
+
+            GameObject nfPoint;
+            GameObject lineRend;
+            NFPointManager ptMan;
+
+            Vector3[] linePts = { tmpVecs[num], tmpVecs[num] };
+
+            if ( currInfo.type == ipType.WORKSTATION )
             {
                 // the network flow points
-                GameObject nfPoint = (GameObject)Instantiate(ptPrefab);
+                nfPoint = (GameObject)Instantiate(ptPrefab);
                 nfPoint.name = "IP(NF): " + currInfo.ipAddress;
-      
+
+                lineRend = (GameObject)Instantiate(nodeLinePrefab);
+                lineRend.name = "Line(NF): " + currInfo.ipAddress;
+
+                ptMan = nfPoint.GetComponent<NFPointManager>();
+                ptMan.nodeType = ipType.WORKSTATION;
+                ptMan.lineBaseObject = bgObj;
+                ptMan.setLineRendObject(lineRend);
+                ptMan.deactivate();
+
+
                 nfPoint.transform.SetParent(layers[0].transform);
                 nfPoint.transform.localPosition = tmpVecs[num];
                 nfPoint.transform.localScale = new Vector3(0.05f, 0.05f, 1.0f);
 
                 nfPoint.SetActive(false);
+                lineRend.SetActive(false);
 
                 nfMap.Add(lowerByte, nfPoint);
 
-                // the IPS points
-                GameObject ipsPoint = (GameObject)Instantiate(ptPrefab);
-                ipsPoint.name = "IP(IPS): " + entry.Value;
-
-                ipsPoint.transform.SetParent(layers[1].transform);
-                ipsPoint.transform.localPosition = tmpVecs[num];
-                ipsPoint.transform.localScale = new Vector3(0.05f, 0.05f, 1.0f);
-
-                ipsPoint.SetActive(false);
-
-                ipsMap.Add(lowerByte, ipsPoint);
+            
             }
             else
             {
                 // server point
-                GameObject serverPoint = (GameObject)Instantiate(ptPrefab);
+                GameObject serverPoint = (GameObject)Instantiate(starPrefab);
                 serverPoint.name = "IP(Server): " + entry.Value;
+
+                lineRend = (GameObject)Instantiate(nodeLinePrefab);
+                lineRend.name = "Line(Server): " + currInfo.ipAddress;
+
+                ptMan = serverPoint.GetComponent<NFPointManager>();
+                ptMan.nodeType = ipType.SERVER;
+                ptMan.lineBaseObject = bgObj;
+                ptMan.setLineRendObject(lineRend);
+                ptMan.deactivate();
 
                 serverPoint.transform.SetParent(layers[2].transform);
                 serverPoint.transform.localPosition = tmpVecs[num];
-                serverPoint.transform.localScale = new Vector3(0.05f, 0.05f, 1.0f);
+                //serverPoint.transform.localScale = new Vector3(0.05f, 0.05f, 5.0f);
 
                 serverPoint.SetActive(false);
+                lineRend.SetActive(false);
 
                 nfMap.Add(lowerByte, serverPoint);
             }
-            
 
 
+            // the IPS points
+            GameObject ipsPoint = (GameObject)Instantiate(ptPrefab);
+            ipsPoint.name = "IP(IPS): " + entry.Value;
 
+            lineRend = (GameObject)Instantiate(nodeLinePrefab);
+            lineRend.name = "Line(IPS): " + currInfo.ipAddress;
+
+            ptMan = ipsPoint.GetComponent<NFPointManager>();
+            ptMan.nodeType = ipType.WORKSTATION;
+            ptMan.lineBaseObject = bgObj;
+            ptMan.setLineRendObject(lineRend);
+            ptMan.deactivate();
+
+            ipsPoint.transform.SetParent(layers[1].transform);
+            ipsPoint.transform.localPosition = tmpVecs[num];
+            ipsPoint.transform.localScale = new Vector3(0.05f, 0.05f, 1.0f);
+
+            ipsPoint.SetActive(false);
+            lineRend.SetActive(false);
+
+            ipsMap.Add(lowerByte, ipsPoint);
 
             num++;
         }
@@ -343,10 +374,13 @@ public class SubnetMapping : MonoBehaviour {
     {
         float tScaleVal;
 
+        NFPointManager ptMan;
 
         foreach (KeyValuePair<int, GameObject> entry in nfMap)
         {
-            entry.Value.SetActive(false);
+            ptMan = entry.Value.GetComponent<NFPointManager>();
+            ptMan.deactivate();
+            //entry.Value.SetActive(false);
         }
 
         int lowerByte;
@@ -357,17 +391,29 @@ public class SubnetMapping : MonoBehaviour {
             lowerByte = (int)(entry.Key & 0xFFFF);
             if (nfMap.TryGetValue(lowerByte, out g))
             {
-                tScaleVal = getScaleVal((float)entry.Value.numTimesSeen);
+                ptMan = g.GetComponent<NFPointManager>();
 
-                g.transform.localScale = new Vector3(tScaleVal, tScaleVal, 1.0f);
+                ipDataStruct ipds = entry.Value;
+                tScaleVal = getScaleVal((float)ipds.numTimesSeen);
 
-                g.SetActive(true);
+                if (ptMan.nodeType == ipType.WORKSTATION)
+                {
+                    g.transform.localScale = new Vector3(tScaleVal, tScaleVal, 1.0f);
+                }
+                else if (ptMan.nodeType == ipType.SERVER)
+                {
+                    tScaleVal *= 2.0f;
+                    g.transform.localScale = new Vector3(tScaleVal, tScaleVal, tScaleVal);
+                }
+                //g.SetActive(true);
+                ptMan.activate();
             }
         }
     }
 
     public void activateBBNodes(Dictionary<long, bbDataStruct> map)
     {
+        
         if (map.Count < 1) return;
 
         Material mat;
@@ -470,9 +516,12 @@ public class SubnetMapping : MonoBehaviour {
 
     public void activateIPSNodes(Dictionary<long, ipsDataStruct> map)
     {
+        NFPointManager ptMan;
         foreach (KeyValuePair<int, GameObject> entry in ipsMap)
         {
-            entry.Value.SetActive(false);  
+            ptMan = entry.Value.GetComponent<NFPointManager>();
+            ptMan.deactivate();
+            //entry.Value.SetActive(false);  
         }
 
         int lowerByte;
@@ -487,7 +536,9 @@ public class SubnetMapping : MonoBehaviour {
             if (ipsMap.TryGetValue(lowerByte, out g))
             {
                 g.transform.localScale = new Vector3(scale, scale, 1.0f);
-                g.SetActive(true);
+                ptMan = g.GetComponent<NFPointManager>();
+                ptMan.activate();
+                //g.SetActive(true);
 
                 mat = g.GetComponent<MeshRenderer>().material;
                 switch (entry.Value.priority)
