@@ -446,21 +446,22 @@ public class ActionAreaManager : MonoBehaviour {
         if(drawTimeConnections)
         {
             Array.Sort<timePosition>(tpArray);
+            Vector3[] tmpLinePts = new Vector3[tpArray.Length];
 
-            for (int i = 1; i < tpArray.Length; i++)
+            for (int i = 0; i < tpArray.Length; i++)
             {
-                GameObject lineObj = (GameObject)Instantiate(linePrefab);
-                lineObj.transform.SetParent(gameObject.transform);
-
-                tmpPts[0] = gameObject.transform.TransformPoint(tpArray[i].position);
-                tmpPts[1] = gameObject.transform.TransformPoint(tpArray[i - 1].position);
-
-                LineRenderer lineRend = lineObj.GetComponent<LineRenderer>();
-                lineRend.useWorldSpace = false;
-                lineRend.SetPositions(tmpPts);
-
-                acticeNodeObjects.Add(lineObj);
+                tmpLinePts[i] = tpArray[i].position;
             }
+
+            GameObject lineObj = (GameObject)Instantiate(linePrefab);
+            lineObj.transform.SetParent(gameObject.transform);
+
+            LineRenderer lineRend = lineObj.GetComponent<LineRenderer>();
+            lineRend.useWorldSpace = false;
+            lineRend.numPositions = tmpLinePts.Length;
+            lineRend.SetPositions(tmpLinePts);
+
+            acticeNodeObjects.Add(lineObj);
         }
 
     }
