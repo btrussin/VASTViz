@@ -8,6 +8,10 @@ public class TimelineScript : MonoBehaviour {
     public GameObject sliderLine;
     public GameObject sliderPoint;
 
+    public GameObject sliderEnd;
+    public GameObject sliderEndLine;
+    public GameObject sliderEndPoint;
+
     public GameObject baseLine;
 
     float stepDistance;
@@ -147,6 +151,15 @@ public class TimelineScript : MonoBehaviour {
     }
 
     public void updateSliderPosition(float d)
+    {
+        // 'd' is also the correct linear combination of the left and right slider edges
+        // left * d + right * ( 1 - d )
+        currPosition = slider.transform.localPosition;
+        currPosition.x = Mathf.Clamp(d, 0.0f, 1.0f);
+        slider.transform.localPosition = currPosition;
+    }
+
+    public void updateSliderEndPosition(float d)
     {
         // 'd' is also the correct linear combination of the left and right slider edges
         // left * d + right * ( 1 - d )

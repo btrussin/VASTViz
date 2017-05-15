@@ -460,6 +460,8 @@ public class ActionAreaManager : MonoBehaviour {
             lineRend.useWorldSpace = false;
             lineRend.numPositions = tmpLinePts.Length;
             lineRend.SetPositions(tmpLinePts);
+            lineRend.startColor = Color.white;
+            lineRend.endColor = Color.black;
 
             acticeNodeObjects.Add(lineObj);
         }
@@ -491,6 +493,6 @@ class timePosition : IComparable<timePosition>
         }
 
         //Return the difference in power.
-        return (time - other.time < 0.0 ? -1 : 1 );
+        return (other.time - time < 0.0 ? -1 : 1 );
     }
 }
