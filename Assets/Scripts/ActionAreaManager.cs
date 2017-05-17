@@ -11,6 +11,14 @@ public struct ipTimelineDetails
     public long srcIpNum;
     public long dstIpNum;
     public bool isSrc;
+    public int firstSeenSrcPayloadBytes;
+    public int firstSeenDestPayloadBytes;
+}
+
+public enum actionAreaDisplayType
+{
+    ALL_TRAFFIC,
+    SELECTED_TRAFFIC
 }
 
 public class ActionAreaManager : MonoBehaviour {
@@ -28,6 +36,8 @@ public class ActionAreaManager : MonoBehaviour {
 
     public bool subnetsExterior = true;
     public bool drawTimeConnections = false;
+
+    public actionAreaDisplayType displayType;
 
     TestSQLiteConn dbConnClass;
 
@@ -216,6 +226,12 @@ public class ActionAreaManager : MonoBehaviour {
         }
 
         updateList();
+
+        if( displayType == actionAreaDisplayType.SELECTED_TRAFFIC )
+        {
+            updateActionAreaForSelectedTraffic();
+        }
+        
     }
 
     public void removeActiveNode(NodeStatus ns)
@@ -227,13 +243,20 @@ public class ActionAreaManager : MonoBehaviour {
             currentActiveNodes.Remove(ns.currIpInfo.ipAddress);
         }
 
-        if(activeNodeIpAddress.Equals(ns.currIpInfo.ipAddress))
-        {
-            activeNodeIpAddress = "";
-            updateActiveNode();
-        }
-
         updateList();
+
+        if (displayType == actionAreaDisplayType.SELECTED_TRAFFIC)
+        {
+            updateActionAreaForSelectedTraffic();
+        }
+        else if (displayType == actionAreaDisplayType.ALL_TRAFFIC)
+        {
+            if (activeNodeIpAddress.Equals(ns.currIpInfo.ipAddress))
+            {
+                activeNodeIpAddress = "";
+                updateActiveNodeForAllTraffic();
+            }
+        }
     }
 
     public void activateSelectedNode(NodeStatus ns)
@@ -242,7 +265,11 @@ public class ActionAreaManager : MonoBehaviour {
         {
             activeNodeIpAddress = ns.currIpInfo.ipAddress;
             updateList();
-            updateActiveNode();
+
+            if (displayType == actionAreaDisplayType.ALL_TRAFFIC)
+            {
+                updateActiveNodeForAllTraffic();
+            }
         }
     }
 
@@ -302,7 +329,7 @@ public class ActionAreaManager : MonoBehaviour {
         }
     }
 
-    public void updateActiveNode()
+    public void updateActiveNodeForAllTraffic()
     {
         //List<GameObject> acticeNodeObjects = new List<GameObject>();
         foreach(GameObject gObj in acticeNodeObjects)
@@ -341,6 +368,7 @@ public class ActionAreaManager : MonoBehaviour {
                     if (tgtIpNum >= minSubnetIpNum[i] && tgtIpNum <= maxSubnetIpNum[i])
                     {
                         tgtIdx = i;
+                        Debug.Log(details.srcIp + " connected with " + details.dstIp);
                         break;
                     }
                 }
@@ -348,11 +376,12 @@ public class ActionAreaManager : MonoBehaviour {
                 nodeDetailsLists[tgtIdx].Add(details);
             }
 
+            /*
             Debug.Log("Sub1: " + nodeDetailsLists[0].Count +
                 "\tSub2: " + nodeDetailsLists[1].Count +
                 "\tSub3: " + nodeDetailsLists[2].Count +
-                "\tInternet: " + nodeDetailsLists[3].Count);
-
+                "\tInternet: " + nodeDetailsLists[3].Count);    
+            */
         }
 
 
@@ -362,6 +391,9 @@ public class ActionAreaManager : MonoBehaviour {
 
         ipTimelineDetails tmpDetails;
         bool isSrc;
+
+        Dictionary<long, double> maxTimePerIp = new Dictionary<long, double>();
+        double tTime;
 
         for (int i = 0; i < 4; i++)
         {
@@ -382,6 +414,28 @@ public class ActionAreaManager : MonoBehaviour {
                     tmpDetails.isSrc = isSrc;
                 }
 
+
+
+                if (maxTimePerIp.TryGetValue(details.srcIpNum, out tTime))
+                {
+                    if (details.time > tTime)
+                    {
+                        maxTimePerIp[details.srcIpNum] = details.time;
+                    }
+                }
+                else maxTimePerIp.Add(details.srcIpNum, details.time);
+
+                if (maxTimePerIp.TryGetValue(details.dstIpNum, out tTime))
+                {
+                    if (details.time > tTime)
+                    {
+                        maxTimePerIp[details.dstIpNum] = details.time;
+                    }
+                }
+                else maxTimePerIp.Add(details.dstIpNum, details.time);
+
+
+
             }
 
         }
@@ -390,23 +444,22 @@ public class ActionAreaManager : MonoBehaviour {
         float minHeight = 0.1f;
         float maxHeight = 1.0f;
         float heightDiff = maxHeight - minHeight;
-        double heighTimeRation = heightDiff / timeDiff;
+        double heighTimeRatio = heightDiff / timeDiff;
         Vector3 pos;
 
         Vector3[] tmpPts = new Vector3[2];
         Vector3 offset = Vector3.zero;
 
-       
         timePosition[] tpArray = new timePosition[numTotalPoints];
         int tpIdx = 0;
 
         for (int i = 0; i < 4; i++)
         {
-            foreach(ipTimelineDetails det in nodeDetailsLists[i])
+            foreach (ipTimelineDetails det in nodeDetailsLists[i])
             {
                 tgtIpNum = det.isSrc ? det.srcIpNum : det.dstIpNum;
-                offset.y = (float)((det.time - minTime) * heighTimeRation + minHeight);
-                if (!subnetPointMaps.TryGetValue(tgtIpNum, out pos) )
+                offset.y = (float)((det.time - minTime) * heighTimeRatio + minHeight);
+                if (!subnetPointMaps.TryGetValue(tgtIpNum, out pos))
                 {
 
                     if (numOuterPointsUnassigned < 1)
@@ -422,25 +475,40 @@ public class ActionAreaManager : MonoBehaviour {
                     numOuterPointsUnassigned--;
                 }
 
-                GameObject lineObj = (GameObject)Instantiate(linePrefab);
-                lineObj.transform.SetParent(gameObject.transform);
-
-                tmpPts[0] = gameObject.transform.TransformPoint(pos);
-                tmpPts[1] = gameObject.transform.TransformPoint(pos + offset);
-
-                tpArray[tpIdx++] = new timePosition(det.time, tmpPts[1]);
-
-                LineRenderer lineRend = lineObj.GetComponent<LineRenderer>();
-                lineRend.useWorldSpace = false;
-                lineRend.SetPositions(tmpPts);
+                tpArray[tpIdx++] = new timePosition(det.time, gameObject.transform.TransformPoint(pos + offset));
 
                 GameObject ptObj = (GameObject)Instantiate(ptPrefab);
                 ptObj.transform.SetParent(gameObject.transform);
                 ptObj.transform.localPosition = pos + offset;
-
-                acticeNodeObjects.Add(lineObj);
+ 
                 acticeNodeObjects.Add(ptObj);
             }
+        }
+
+
+
+        foreach (KeyValuePair<long, double> kv in maxTimePerIp)
+        {
+            offset.y = (float)((kv.Value - minTime) * heighTimeRatio + minHeight);
+
+            if (!subnetPointMaps.TryGetValue(kv.Key, out pos))
+            {
+                Debug.LogError("Cannot find the value for " + kv.Key);
+                continue;
+
+            }
+
+            GameObject lineObj = (GameObject)Instantiate(linePrefab);
+            lineObj.transform.SetParent(gameObject.transform);
+
+            tmpPts[0] = gameObject.transform.TransformPoint(pos);
+            tmpPts[1] = gameObject.transform.TransformPoint(pos + offset);
+
+            LineRenderer lineRend = lineObj.GetComponent<LineRenderer>();
+            lineRend.useWorldSpace = false;
+            lineRend.SetPositions(tmpPts);
+
+            acticeNodeObjects.Add(lineObj);
         }
 
         if(drawTimeConnections)
@@ -450,7 +518,7 @@ public class ActionAreaManager : MonoBehaviour {
 
             for (int i = 0; i < tpArray.Length; i++)
             {
-                tmpLinePts[i] = tpArray[i].position;
+                tmpLinePts[i] = tpArray[i].srcPosition;
             }
 
             GameObject lineObj = (GameObject)Instantiate(linePrefab);
@@ -466,10 +534,198 @@ public class ActionAreaManager : MonoBehaviour {
             acticeNodeObjects.Add(lineObj);
         }
 
+
     }
 
-    public void updateActionArea()
+    public void updateActionAreaForSelectedTraffic()
     {
+        foreach (GameObject gObj in acticeNodeObjects)
+        {
+            GameObject.Destroy(gObj);
+        }
+
+        acticeNodeObjects.Clear();
+
+        for (int i = 0; i < 4; i++)
+        {
+            nodeDetailsLists[i].Clear();
+        }
+
+
+
+        if (currentActiveNodes.Count < 2) return;
+
+        string[] uniqueIpAddresses = new string[currentActiveNodes.Count];
+
+        int idx = 0;
+
+        foreach( KeyValuePair<string, NodeStatus> kv in currentActiveNodes )
+        {
+            uniqueIpAddresses[idx++] = kv.Key;
+        }
+
+        List<ipTimelineDetails> detTraffList = new List<ipTimelineDetails>();
+
+        for ( int i = 0; i < uniqueIpAddresses.Length; i++ )
+        {
+            for (int j = i+1; j < uniqueIpAddresses.Length; j++)
+            {
+                List<ipTimelineDetails> tmpList = dbConnClass.getDetailedNFTrafficBetweenNodes(uniqueIpAddresses[i], uniqueIpAddresses[j]);
+                detTraffList.AddRange(tmpList);
+            }
+        }
+
+
+        // iterate and get 
+
+        Dictionary<long, double> maxTimePerIp = new Dictionary<long, double>();
+
+        double minTime = float.MaxValue;
+        double maxTime = float.MinValue;
+
+        double tTime;
+
+        foreach (ipTimelineDetails details in detTraffList)
+        {
+            if (details.time < minTime) minTime = details.time;
+            if (details.time > maxTime) maxTime = details.time;
+
+            nodeDetailsLists[0].Add(details);
+
+            if (maxTimePerIp.TryGetValue(details.srcIpNum, out tTime))
+            {
+                if (details.time > tTime)
+                {
+                    maxTimePerIp[details.srcIpNum] = details.time;
+                }
+            }
+            else maxTimePerIp.Add(details.srcIpNum, details.time);
+
+            if (maxTimePerIp.TryGetValue(details.dstIpNum, out tTime))
+            {
+                if (details.time > tTime)
+                {
+                    maxTimePerIp[details.dstIpNum] = details.time;
+                }
+            }
+            else maxTimePerIp.Add(details.dstIpNum, details.time);
+        }
+
+
+        double timeDiff = maxTime - minTime;
+        float minHeight = 0.1f;
+        float maxHeight = 1.0f;
+        float heightDiff = maxHeight - minHeight;
+        double heighTimeRatio = 0.0;
+        if (Math.Abs(timeDiff) < 0.000001)
+        {
+            heighTimeRatio = 1.0;
+            minHeight = 0.5f;
+        }
+        else
+        {
+            heighTimeRatio = heightDiff / timeDiff;
+        }
+
+        long[] tmpIpNums = new long[2];
+        Vector3 offset = Vector3.zero;
+        Vector3 pos;
+
+        List<timePosition> timePosList = new List<timePosition>();
+
+        foreach (ipTimelineDetails det in nodeDetailsLists[0])
+        {
+            tmpIpNums[0] = det.srcIpNum;
+            tmpIpNums[1] = det.dstIpNum;
+            offset.y = (float)((det.time - minTime) * heighTimeRatio + minHeight);
+
+            timePosition tmpTp = new timePosition();
+            tmpTp.time = det.time;
+
+            for (int i = 0; i < 2; i++)
+            {
+                if (!subnetPointMaps.TryGetValue(tmpIpNums[i], out pos))
+                {
+                    if (numOuterPointsUnassigned < 1)
+                    {
+                        Debug.LogError("Reached maximum number of internet node points in active area");
+                        continue;
+                    }
+                    int tmpIdx = (int)(UnityEngine.Random.value * (numOuterPointsUnassigned - 1));
+                    pos = outerPlotPoints[tmpIdx];
+
+                    subnetPointMaps.Add(tmpIpNums[i], outerPlotPoints[tmpIdx]);
+                    outerPlotPoints[tmpIdx] = outerPlotPoints[numOuterPointsUnassigned - 1];
+                    numOuterPointsUnassigned--;
+                }
+
+                GameObject ptObj = (GameObject)Instantiate(ptPrefab);
+                ptObj.transform.SetParent(gameObject.transform);
+                ptObj.transform.localPosition = pos;
+                ptObj.transform.localPosition += offset;
+
+                if (i == 0) tmpTp.srcPosition = pos + offset;
+                else tmpTp.dstPosition = pos + offset;
+
+                acticeNodeObjects.Add(ptObj);
+
+                timePosList.Add(tmpTp);
+            }
+
+        }
+
+
+        Vector3[] tmpPts = new Vector3[2];
+
+        foreach (KeyValuePair<long, double> kv in maxTimePerIp)
+        {
+            offset.y = (float)((kv.Value - minTime) * heighTimeRatio + minHeight);
+
+            if (!subnetPointMaps.TryGetValue(kv.Key, out pos))
+            {
+                Debug.LogError("Cannot find the value for " + kv.Key);
+                continue;
+
+            }
+
+            GameObject lineObj = (GameObject)Instantiate(linePrefab);
+            lineObj.transform.SetParent(gameObject.transform);
+
+            tmpPts[0] = gameObject.transform.TransformPoint(pos);
+            tmpPts[1] = gameObject.transform.TransformPoint(pos + offset);
+
+            LineRenderer lineRend = lineObj.GetComponent<LineRenderer>();
+            lineRend.useWorldSpace = false;
+            lineRend.SetPositions(tmpPts);
+
+            acticeNodeObjects.Add(lineObj);
+        }
+
+
+        if (drawTimeConnections)
+        {
+            Vector3[] tmpLinePts = new Vector3[2];
+
+            foreach(timePosition tp in timePosList)
+            {
+                tmpLinePts[0] = gameObject.transform.TransformPoint(tp.srcPosition);
+                tmpLinePts[1] = gameObject.transform.TransformPoint(tp.dstPosition);
+
+                GameObject lineObj = (GameObject)Instantiate(linePrefab);
+                lineObj.transform.SetParent(gameObject.transform);
+
+                LineRenderer lineRend = lineObj.GetComponent<LineRenderer>();
+                lineRend.useWorldSpace = false;
+                //lineRend.numPositions = 2;
+                lineRend.SetPositions(tmpLinePts);
+                //lineRend.startColor = Color.white;
+                //lineRend.endColor = Color.white;
+
+                acticeNodeObjects.Add(lineObj);
+            }
+
+            
+        }
         
     }
 }
@@ -477,12 +733,22 @@ public class ActionAreaManager : MonoBehaviour {
 class timePosition : IComparable<timePosition>
 {
     public double time;
-    public Vector3 position;
+    public Vector3 srcPosition;
+    public Vector3 dstPosition;
+
+    public timePosition(){}
 
     public timePosition(double t, Vector3 p)
     {
         time = t;
-        position = p;
+        srcPosition = p;
+    }
+
+    public timePosition(double t, Vector3 srcP, Vector3 dstP)
+    {
+        time = t;
+        srcPosition = srcP;
+        dstPosition = dstP;
     }
 
     public int CompareTo(timePosition other)
