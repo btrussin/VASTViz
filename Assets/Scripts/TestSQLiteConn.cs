@@ -115,7 +115,8 @@ public class TestSQLiteConn : MonoBehaviour {
 
         }
 
-        string conn = "URI=file:C:\\Users\\btrus\\Documents\\VAST\\sqlite\\vast.db";
+        //string conn = "URI=file:C:\\Users\\btrus\\Documents\\VAST\\sqlite\\vast.db";
+        string conn = "URI=file:C:\\Users\\Public\\Documents\\VAST\\sqlite\\vast.db";
 
         //conn = "URI=file:" + Application.dataPath + "/vast.db";
 
