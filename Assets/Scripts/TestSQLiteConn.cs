@@ -889,7 +889,6 @@ public class TestSQLiteConn : MonoBehaviour {
             }
         }
 
-
     }
 
 
@@ -913,31 +912,33 @@ public class TestSQLiteConn : MonoBehaviour {
         long minTime = timeSlices[currTimeIdx] - 1000 * 60 * numMinInEachDirection;
         long maxTime = timeSlices[currTimeIdx] + 1000 * 60 * numMinInEachDirection;
 
-        sql = "SELECT TimeSeconds, firstSeenSrcIp, firstSeenDestIp, srcIpNum, dstIpNum, firstSeenSrcPayloadBytes, firstSeenDestPayloadBytes FROM networkflow" + 
-            " WHERE TimeSeconds>=" + minTime +
-            " AND TimeSeconds<=" + maxTime +
-        " AND (srcIpNum = " + ipNum + " OR dstIpNum = " + ipNum + ");"; /* both condition */
+        
+        sql = "SELECT TimeSeconds, firstSeenSrcIp, firstSeenDestIp, srcIpNum, dstIpNum, firstSeenSrcPayloadBytes, firstSeenDestPayloadBytes FROM networkflow" +
+            " WHERE (srcIpNum = " + ipNum + " OR dstIpNum = " + ipNum + ") AND TimeSeconds>=" + minTime +
+            " AND TimeSeconds<=" + maxTime + ";";
+        
+       
         cmd.CommandText = sql;
 
         IDataReader reader = cmd.ExecuteReader();
-        while (reader.Read())
+        do
         {
-            ipTimelineDetails tmpData = new ipTimelineDetails();
-            tmpData.time = reader.GetDouble(0);
-            tmpData.srcIp = reader.GetString(1);
-            tmpData.dstIp = reader.GetString(2);
-            tmpData.srcIpNum = reader.GetInt64(3);
-            tmpData.dstIpNum = reader.GetInt64(4);
-            tmpData.firstSeenSrcPayloadBytes = reader.GetInt32(5);
-            tmpData.firstSeenDestPayloadBytes = reader.GetInt32(6);
+            while (reader.Read())
+            {
+                ipTimelineDetails tmpData = new ipTimelineDetails();
+                tmpData.time = reader.GetDouble(0);
+                tmpData.srcIp = reader.GetString(1);
+                tmpData.dstIp = reader.GetString(2);
+                tmpData.srcIpNum = reader.GetInt64(3);
+                tmpData.dstIpNum = reader.GetInt64(4);
+                tmpData.firstSeenSrcPayloadBytes = reader.GetInt32(5);
+                tmpData.firstSeenDestPayloadBytes = reader.GetInt32(6);
 
-            results.Add(tmpData);
-
-
-        }
+                results.Add(tmpData);
+            }
+        } while (reader.NextResult());
 
         reader.Close();
-
 
         return results;
     }
