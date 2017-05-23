@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 using System;
 using System.Threading;
 
@@ -10,12 +11,13 @@ namespace AnnotationPanel
     {
         public string annotationPanelDataPath = "E:\\groundTruth.json";
 
-        DateTime _timeRangeStart;
-        DateTime _timeRangeEnd;
+        DateTime? _timeRangeStart;
+        DateTime? _timeRangeEnd;
 
         DataModel _dataModel = new DataModel();
         bool _waitingForData = true;
         bool _timeRangeDirty = true;    // Flag indicating to the update method that the timerange has changed
+        bool _contentDirty = true;      // General flag indicating that the text content should be regenerated
 
         public GroundTruthModel groundTruthModel
         {
@@ -28,7 +30,7 @@ namespace AnnotationPanel
             }
         }
 
-        public void setTimeRange(DateTime timeStart, DateTime timeEnd)
+        public void setTimeRange(DateTime? timeStart, DateTime? timeEnd)
         {
             if (DateTime.Equals(timeStart, this._timeRangeStart) && DateTime.Equals(timeEnd, this._timeRangeEnd))
             {
@@ -50,15 +52,22 @@ namespace AnnotationPanel
         // Update is called once per frame
         void Update()
         {
+            if (_contentDirty)
+            {
+                _contentDirty = false;
+                RefreshTextContent();
+            }
             if (_waitingForData)
             {
                 if (_dataModel.dataLoadComplete)
                 {
                     // At this point, we now have the data loaded, so we can do whatever
-                    // initialization we need to do based on the data.
-                    this.InitializeWithLoadedData();
+                    // initialization we need to do based on the data. (Enable buttons, etc)
                     _waitingForData = false;
-                } else
+                    this.InitializeWithLoadedData();
+                    _contentDirty = true;
+                }
+                else
                 {
                     DelegateUpdateWaitingForData();
                     return;
@@ -83,29 +92,21 @@ namespace AnnotationPanel
         /// </summary>
         void InitializeWithLoadedData()
         {
-            TextMesh t = FindTextMesh("StatusText");
+        }
+
+        void RefreshTextContent()
+        {
+            Text t = FindTextObject("Text");
             if (t)
             {
-                t.text = "Loaded Data: " + _dataModel.groundTruthModel.annotations.Count;
-
-                //foreach (AnnotationRecord rec in _dataModel.groundTruthModel.annotations)
-                //{
-                //    string msg = "JLH Record: " + rec.when + "\r\n";
-                //    foreach (string str in rec.sourceIPs)
-                //    {
-                //        msg += str + " ------ ";
-                //    }
-                //    Debug.Log(msg);
-                //    
-                //}
-                
+                t.text = GenerateTextContent();
             }
         }
 
-        TextMesh FindTextMesh(string name)
+        Text FindTextObject(string name)
         {
-            TextMesh[] textMeshes = GetComponentsInChildren<TextMesh>();
-            foreach (TextMesh text in textMeshes)
+            Text[] texts = GetComponentsInChildren<Text>();
+            foreach (Text text in texts)
             {
                 if (text.name.Equals(name))
                 {
@@ -113,6 +114,31 @@ namespace AnnotationPanel
                 }
             }
             return null;
+        }
+
+        string GenerateTextContent()
+        {
+            string result = "";
+            if (_timeRangeStart == null && _timeRangeEnd == null)
+            {
+                // Note that no active time range and show stats.
+                result = "<i>Note: No active time range set.</i>\r\n\r\n";
+                if (!_dataModel.dataLoadComplete)
+                {
+                    result += "Loading data...";
+                } else
+                {
+                    result += "<b>Number of loaded annotations</b>: " + _dataModel.groundTruthModel.annotations.Count;
+                }
+                return result;
+            } else
+            {
+                result = "<b>Active time range</b>: \r\n";
+                result += "\t" + _timeRangeStart + "\r\n";
+                result += "\t" + _timeRangeEnd + "\r\n";
+
+            }
+            return result;
         }
     }
 
