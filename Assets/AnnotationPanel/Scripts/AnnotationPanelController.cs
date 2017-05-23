@@ -7,16 +7,15 @@ using System.Threading;
 
 namespace AnnotationPanel
 {
-    public class AnnotationPanel : MonoBehaviour
+    public class AnnotationPanelController : MonoBehaviour, RealityCheck.ITimeRangeListener
     {
         public string annotationPanelDataPath = "E:\\groundTruth.json";
 
-        DateTime? _timeRangeStart;
-        DateTime? _timeRangeEnd;
+        TimeSpan? _timeRangeStart;
+        TimeSpan? _timeRangeEnd;
 
         DataModel _dataModel = new DataModel();
         bool _waitingForData = true;
-        bool _timeRangeDirty = true;    // Flag indicating to the update method that the timerange has changed
         bool _contentDirty = true;      // General flag indicating that the text content should be regenerated
 
         public GroundTruthModel groundTruthModel
@@ -30,9 +29,9 @@ namespace AnnotationPanel
             }
         }
 
-        public void setTimeRange(DateTime? timeStart, DateTime? timeEnd)
+        public void SetActiveTimeRange(TimeSpan? timeStart, TimeSpan? timeEnd)
         {
-            if (DateTime.Equals(timeStart, this._timeRangeStart) && DateTime.Equals(timeEnd, this._timeRangeEnd))
+            if (TimeSpan.Equals(timeStart, this._timeRangeStart) && TimeSpan.Equals(timeEnd, this._timeRangeEnd))
             {
                 // No actual change
                 return;
@@ -40,7 +39,7 @@ namespace AnnotationPanel
 
             this._timeRangeStart = timeStart;
             this._timeRangeEnd = timeEnd;
-            this._timeRangeDirty = true;
+            this._contentDirty = true;
         }
 
         // Use this for initialization
@@ -133,10 +132,17 @@ namespace AnnotationPanel
                 return result;
             } else
             {
-                result = "<b>Active time range</b>: \r\n";
-                result += "\t" + _timeRangeStart + "\r\n";
-                result += "\t" + _timeRangeEnd + "\r\n";
+                DateTime dt1 = new DateTime(1970, 1, 1, 0, 0, 0, 0, System.DateTimeKind.Utc);
+                dt1 = dt1.AddMilliseconds((long)(_timeRangeStart.GetValueOrDefault().TotalMilliseconds)).ToLocalTime();
 
+                DateTime dt2 = new DateTime(1970, 1, 1, 0, 0, 0, 0, System.DateTimeKind.Utc);
+                dt2 = dt2.AddMilliseconds((long)(_timeRangeEnd.GetValueOrDefault().TotalMilliseconds)).ToLocalTime();
+
+                result = "<b>Active time range</b>: \r\n";
+                result += "\t" + dt1 + "\r\n";
+                result += "\t" + dt2 + "\r\n";
+                
+                result += "\r\n\r\nAs of " + DateTime.Now;
             }
             return result;
         }
