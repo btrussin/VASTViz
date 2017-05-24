@@ -10,6 +10,7 @@ namespace AnnotationPanel
     public class AnnotationPanelController : MonoBehaviour, RealityCheck.ITimeRangeListener
     {
         public string annotationPanelDataPath = "E:\\groundTruth.json";
+        public bool showFullDetails = false;
 
         TimeSpan? _timeRangeStart;
         TimeSpan? _timeRangeEnd;
@@ -17,6 +18,8 @@ namespace AnnotationPanel
         DataModel _dataModel = new DataModel();
         bool _waitingForData = true;
         bool _contentDirty = true;      // General flag indicating that the text content should be regenerated
+
+        List<AnnotationRecord> _activeRecords = new List<AnnotationRecord>();
 
         public GroundTruthModel groundTruthModel
         {
@@ -132,19 +135,177 @@ namespace AnnotationPanel
                 return result;
             } else
             {
+                long msStart = (long)(_timeRangeStart.GetValueOrDefault().TotalMilliseconds);
+                long msEnd = (long)(_timeRangeEnd.GetValueOrDefault().TotalMilliseconds);
+
                 DateTime dt1 = new DateTime(1970, 1, 1, 0, 0, 0, 0, System.DateTimeKind.Utc);
-                dt1 = dt1.AddMilliseconds((long)(_timeRangeStart.GetValueOrDefault().TotalMilliseconds)).ToLocalTime();
+                dt1 = dt1.AddMilliseconds(msStart).ToLocalTime();
 
                 DateTime dt2 = new DateTime(1970, 1, 1, 0, 0, 0, 0, System.DateTimeKind.Utc);
-                dt2 = dt2.AddMilliseconds((long)(_timeRangeEnd.GetValueOrDefault().TotalMilliseconds)).ToLocalTime();
+                dt2 = dt2.AddMilliseconds(msEnd).ToLocalTime();
 
-                result = "<b>Active time range</b>: \r\n";
-                result += "\t" + dt1 + "\r\n";
-                result += "\t" + dt2 + "\r\n";
-                
-                result += "\r\n\r\nAs of " + DateTime.Now;
+                List<AnnotationRecord> recentRecs;
+                List<AnnotationRecord> upcomingRecs;
+                List<AnnotationRecord> activeRecs = FindRelevantRecords(msStart, msEnd, out recentRecs, out upcomingRecs);
+
+                result = "<b>Active time range</b>: ";
+                result += dt1 + "  --  ";
+                result += dt2 + "\r\n\r\n";
+                if (recentRecs.Count + upcomingRecs.Count + activeRecs.Count == 0)
+                {
+                    result += "<color=#CCCCCC><i>No comments for this time range</i></color>";
+                } else
+                {
+                    result += "<color=#FFCCCC>";
+                    result += GetRecordsText(activeRecs, null);
+                    result += "</color><color=#FFFFCC>";
+                    result += GetRecordsText(upcomingRecs, "Upcoming");
+                    result += "</color><color=#DDDDDD>";
+                    result += GetRecordsText(recentRecs, "Recent");
+                    result += "</color>";
+                }
+
+                //------------------------------------------------------------------
+                // If something new has entered the active list, notify with a sound
+                bool alreadyNoted = true;
+                foreach (AnnotationRecord rec in activeRecs)
+                {
+                    if (!_activeRecords.Contains(rec))
+                    {
+                        alreadyNoted = false;
+                        break;
+                    }
+                }
+                if (!alreadyNoted)
+                {
+                    AudioSource[] audioSources = GetComponentsInChildren<AudioSource>();
+                    foreach (AudioSource audio in audioSources)
+                    {
+                        if (audio.name.Equals("AlertNotification"))
+                        {
+                            audio.Play();
+                            break;
+                        }
+                    }
+                    
+                }
+                _activeRecords = activeRecs;
+                //------------------------------------------------------------------
+
             }
             return result;
+        }
+
+        string GetRecordsText(List<AnnotationRecord> recs, string title)
+        {
+            if (recs.Count == 0)
+            {
+                return "";
+            }
+            string result = "";
+            if (title != null)
+            {
+                result += "<b>" + title + "</b>\r\n";
+            }
+            foreach (AnnotationRecord rec in recs)
+            {
+                result += GetRecordText(rec);
+                result += "\r\n";
+            }
+            return result;
+        }
+        string GetRecordText(AnnotationRecord rec)
+        {
+            string result = "";
+            result += "<b>" + rec.aggregateEvent + "</b>";
+            result += " (" + rec.when + ")\r\n";
+            if (rec.eventDetail != null)
+            {
+                result += rec.eventDetail + "\r\n";
+            }
+            if (rec.dataSourceAndIndicator != null)
+            {
+                result += "<i><color=#DDDDDD>" + rec.dataSourceAndIndicator + "</color></i>\r\n";
+            }
+
+            if (showFullDetails)
+            {
+                result += ListToString(rec.sourceIPs, "Source IPs");
+                result += ListToString(rec.targetHostnames, "Target Hostnames");
+                result += ListToString(rec.targetIPInternals, "Target IPs (Internal)");
+                result += ListToString(rec.targetIPExternals, "Target IPs (External)");
+                result += ListToString(rec.ports, "Ports");
+            }
+
+            return result;
+        }
+
+        string ListToString(List<string> list, string label)
+        {
+            if (list == null || list.Count == 0)
+            {
+                return "";
+            }
+
+            string result = label + ": ";
+            bool first = true;
+            foreach (string str in list)
+            {
+                if (!first)
+                {
+                    result += ", ";
+                } else
+                {
+                    first = false;
+                }
+                result += str;
+            }
+
+            result += "\r\n";
+            return result;
+        }
+
+        List<AnnotationRecord> FindRelevantRecords(long msStart, long msEnd, out List<AnnotationRecord> recent, out List<AnnotationRecord> upcoming) {
+            List<AnnotationRecord> result = new List<AnnotationRecord>();
+            recent = new List<AnnotationRecord>();
+            upcoming = new List<AnnotationRecord>();
+
+            long msNearStart = msStart - (6 * 60 * 60 * 1000);  // 6 hours before window
+            long msNearEnd = msEnd + (6 * 60 * 60 * 1000);  // 6 hours before window
+
+            foreach (AnnotationRecord rec in _dataModel.groundTruthModel.annotations)
+            {
+                if (TimeRangeContains(msStart, msEnd, rec.timeStart, rec.timeEnd))
+                {
+                    result.Add(rec);
+                }
+                else if (TimeRangeContains(msEnd, msNearEnd, rec.timeStart, rec.timeEnd))
+                {
+                    upcoming.Add(rec);
+                }
+                else if (TimeRangeContains(msNearStart, msStart, rec.timeStart, rec.timeEnd))
+                {
+                    recent.Add(rec);
+                }
+            }
+
+            return result;
+        }
+
+        static bool TimeRangeContains(long windowStart, long windowEnd, long eventStart, long eventEnd)
+        {
+            // there are really only two conditions that we need to check - the inverse scenario
+            // where the start and end of the event occur either left or right of the window
+            if (eventStart < windowStart && eventEnd < windowStart)
+            {
+                return false;
+            }
+            if (eventStart > windowEnd && eventEnd > windowEnd)
+            {
+                return false;
+            }
+
+            return true;
         }
     }
 

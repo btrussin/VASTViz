@@ -31,6 +31,8 @@ namespace AnnotationPanel
     {
         public int excelSheetRow;
         public string when;
+        public long timeStart;
+        public long timeEnd;
         public string aggregateEvent;
         public string degreeOfSubtlety;
         public string dataSourceAndIndicator;
