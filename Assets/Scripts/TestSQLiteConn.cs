@@ -47,6 +47,8 @@ public enum dbDataType
 
 public class TestSQLiteConn : MonoBehaviour {
 
+    public RealityCheck.RealitySessionState realitySessionState;
+
     Dictionary<long, ipInfo>[] subnetMaps = new Dictionary<long, ipInfo>[3];
 
     long[] minSubnetIpNum = new long[3];
@@ -103,7 +105,7 @@ public class TestSQLiteConn : MonoBehaviour {
     // Use this for initialization
     void Start()
     {
-
+        
         iterTimeOffset = maxIterTime * 1000.0;
 
         for (int i = 0; i < 3; i++)
@@ -195,7 +197,7 @@ public class TestSQLiteConn : MonoBehaviour {
             Debug.Log("Getting DB Values");
             getVals();
 
-
+            UpdateActiveTimeRange();
         }
 
         if (Input.GetKeyDown(KeyCode.C)) for (int i = 0; i < 3; i++) Debug.Log("Subnet " + (i + 1) + ": " + currNfIpsSeen[i].Count);
@@ -629,6 +631,34 @@ public class TestSQLiteConn : MonoBehaviour {
 
         currTimeIdx = inc;
         getVals();
+
+        UpdateActiveTimeRange();
+    }
+
+    private void UpdateActiveTimeRange()
+    {
+        if (realitySessionState == null)
+        {
+            return;
+        }
+
+        // First calculate the times
+        TimeSpan whenStart = GetActiveTimeStart();
+        TimeSpan whenEnd = GetActiveTimeEnd();  
+
+        realitySessionState.SetActiveTimeRange(whenStart, whenEnd);
+    }
+    public TimeSpan GetActiveTimeStart()
+    {
+        long secondsCurrent = minUTCTime + ((long)currTimeIdx) * ((long)numSecondsPerSlice);
+        TimeSpan whenStart = TimeSpan.FromSeconds(secondsCurrent);
+        return whenStart;
+    }
+    public TimeSpan GetActiveTimeEnd()
+    {
+        long secondsCurrent = minUTCTime + ((long)currTimeIdx) * ((long)numSecondsPerSlice);
+        TimeSpan whenEnd = TimeSpan.FromSeconds(secondsCurrent + numSecondsPerSlice);
+        return whenEnd;
     }
 
     public int getTimeSliceIdx()
@@ -966,7 +996,7 @@ public class TestSQLiteConn : MonoBehaviour {
 
         long ipNum1 = getIpNumFromString(ipAddress1);
         long ipNum2 = getIpNumFromString(ipAddress2);
-        if (ipNum1 < 0 || ipNum2 < 0)
+        if (ipNum1 < 0 || ipNum2 < 0 )
         {
             return results;
         }
@@ -1076,3 +1106,4 @@ public class TestSQLiteConn : MonoBehaviour {
     }
 
 }
+
