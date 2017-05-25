@@ -1,9 +1,9 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using System;
 using System.Threading;
+using System.IO;
 
 namespace AnnotationPanel
 {
@@ -23,7 +23,8 @@ namespace AnnotationPanel
 
         public GroundTruthModel groundTruthModel
         {
-            get {
+            get
+            {
                 if (_dataModel.dataLoadComplete)
                 {
                     return _dataModel.groundTruthModel;
@@ -48,7 +49,8 @@ namespace AnnotationPanel
         // Use this for initialization
         void Start()
         {
-            _dataModel.Initialize(annotationPanelDataPath);
+            string backupDataPath = Directory.GetParent(Application.dataPath).FullName + "/groundTruth.json";
+            _dataModel.Initialize(annotationPanelDataPath, backupDataPath);
         }
 
         // Update is called once per frame
@@ -128,12 +130,14 @@ namespace AnnotationPanel
                 if (!_dataModel.dataLoadComplete)
                 {
                     result += "Loading data...";
-                } else
+                }
+                else
                 {
                     result += "<b>Number of loaded annotations</b>: " + _dataModel.groundTruthModel.annotations.Count;
                 }
                 return result;
-            } else
+            }
+            else
             {
                 long msStart = (long)(_timeRangeStart.GetValueOrDefault().TotalMilliseconds);
                 long msEnd = (long)(_timeRangeEnd.GetValueOrDefault().TotalMilliseconds);
@@ -154,7 +158,8 @@ namespace AnnotationPanel
                 if (recentRecs.Count + upcomingRecs.Count + activeRecs.Count == 0)
                 {
                     result += "<color=#CCCCCC><i>No comments for this time range</i></color>";
-                } else
+                }
+                else
                 {
                     result += "<color=#FFCCCC>";
                     result += GetRecordsText(activeRecs, null);
@@ -187,7 +192,7 @@ namespace AnnotationPanel
                             break;
                         }
                     }
-                    
+
                 }
                 _activeRecords = activeRecs;
                 //------------------------------------------------------------------
@@ -254,7 +259,8 @@ namespace AnnotationPanel
                 if (!first)
                 {
                     result += ", ";
-                } else
+                }
+                else
                 {
                     first = false;
                 }
@@ -265,7 +271,8 @@ namespace AnnotationPanel
             return result;
         }
 
-        List<AnnotationRecord> FindRelevantRecords(long msStart, long msEnd, out List<AnnotationRecord> recent, out List<AnnotationRecord> upcoming) {
+        List<AnnotationRecord> FindRelevantRecords(long msStart, long msEnd, out List<AnnotationRecord> recent, out List<AnnotationRecord> upcoming)
+        {
             List<AnnotationRecord> result = new List<AnnotationRecord>();
             recent = new List<AnnotationRecord>();
             upcoming = new List<AnnotationRecord>();
@@ -320,12 +327,14 @@ namespace AnnotationPanel
 
         private Thread thread;
         private string dataPath;
+        private string backupDataPath;
 
-        public void Initialize(string dataPath)
+        public void Initialize(string dataPath, string backupDataPath)
         {
             if (thread == null)
             {
                 this.dataPath = dataPath;
+                this.backupDataPath = backupDataPath;
                 thread = new Thread(new ThreadStart(this.LoadDataModel));
                 thread.Start();
             }
@@ -333,7 +342,11 @@ namespace AnnotationPanel
 
         void LoadDataModel()
         {
-            this.groundTruthModel = new AnnotationModelManager().LoadGroundTruthModel(dataPath);
+            groundTruthModel = new AnnotationModelManager().LoadGroundTruthModel(dataPath);
+            if (groundTruthModel == null)
+            {
+                groundTruthModel = new AnnotationModelManager().LoadGroundTruthModel(backupDataPath);
+            }
             dataLoadComplete = true;
             thread = null;
         }

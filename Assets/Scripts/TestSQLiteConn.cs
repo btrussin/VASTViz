@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Mono.Data.Sqlite;
 using System.Data;
 using System;
+using System.IO;
 
 public enum ipType
 {
@@ -34,7 +35,7 @@ public struct bbDataStruct
 public struct ipsDataStruct
 {
     public string ipAddress;
-    public int priority; 
+    public int priority;
 }
 
 
@@ -45,9 +46,17 @@ public enum dbDataType
     INTRUSION_PROTECTION
 }
 
-public class TestSQLiteConn : MonoBehaviour {
+public class TestSQLiteConn : MonoBehaviour
+{
 
     public RealityCheck.RealitySessionState realitySessionState;
+
+    /// <summary>
+    /// When checked, the parent folder of the assets will be checked first for a vast.db
+    /// file to use. 
+    /// </summary>
+    public bool checkBasePathForDB = false;
+    public string databaseURI = "URI=file:C:\\Users\\Public\\Documents\\VAST\\sqlite\\vast.db";
 
     Dictionary<long, ipInfo>[] subnetMaps = new Dictionary<long, ipInfo>[3];
 
@@ -105,7 +114,7 @@ public class TestSQLiteConn : MonoBehaviour {
     // Use this for initialization
     void Start()
     {
-        
+
         iterTimeOffset = maxIterTime * 1000.0;
 
         for (int i = 0; i < 3; i++)
@@ -117,10 +126,16 @@ public class TestSQLiteConn : MonoBehaviour {
 
         }
 
-        //string conn = "URI=file:C:\\Users\\btrus\\Documents\\VAST\\sqlite\\vast.db";
-        string conn = "URI=file:C:\\Users\\Public\\Documents\\VAST\\sqlite\\vast.db";
 
-        //conn = "URI=file:" + Application.dataPath + "/vast.db";
+        string conn = this.databaseURI;
+        if (checkBasePathForDB)
+        {
+            string testPath = Directory.GetParent(Application.dataPath).FullName + "/vast.db";
+            if (File.Exists(testPath))
+            {
+                conn = "file:" + testPath;
+            }
+        }
 
         Debug.Log("Connecting to: " + conn);
 
@@ -131,7 +146,7 @@ public class TestSQLiteConn : MonoBehaviour {
         /* DELETE NEXT LINE */
         //temp();
 
-       
+
 
         numSecondsPerSlice = numMinutesPerSlice * 60;
 
@@ -175,7 +190,7 @@ public class TestSQLiteConn : MonoBehaviour {
     {
         IDbCommand cmd = dbconn.CreateCommand();
         string sql = "REINDEX time_recIpNum_idx;";
-        
+
         cmd.CommandText = sql;
 
         cmd.ExecuteNonQuery();
@@ -183,9 +198,10 @@ public class TestSQLiteConn : MonoBehaviour {
     }
 
     // Update is called once per frame
-    void Update() {
+    void Update()
+    {
 
-        if ((Input.GetKeyDown(KeyCode.Space) || inAnimation || currTimeIdx < 0 ) && !queryActive)
+        if ((Input.GetKeyDown(KeyCode.Space) || inAnimation || currTimeIdx < 0) && !queryActive)
         {
             currTimeIdx++;
 
@@ -254,7 +270,7 @@ public class TestSQLiteConn : MonoBehaviour {
                                         tmpNfValue = new ipDataStruct();
                                         tmpNfValue.ipAddress = ipAddress;
                                         tmpNfValue.numTimesSeen = numTimesSeen;
-                                        nextNfIpsSeen[idx].Add(ipNum, tmpNfValue);   
+                                        nextNfIpsSeen[idx].Add(ipNum, tmpNfValue);
                                     }
                                     else
                                     {
@@ -269,12 +285,12 @@ public class TestSQLiteConn : MonoBehaviour {
 
 
 
-                            if(!foundInSubnet)
+                            if (!foundInSubnet)
                             {
                                 tmpNfValue = new ipDataStruct();
                                 tmpNfValue.ipAddress = ipAddress;
                                 outOfNetIpsSeen.Add(ipNum, tmpNfValue);
-                            } 
+                            }
                         }
 
                         catch (System.InvalidCastException e)
@@ -295,7 +311,7 @@ public class TestSQLiteConn : MonoBehaviour {
                         {
                             ipAddress = dataReader.GetString(0);
 
-                            if( ipAddress == null || ipAddress.Length < 7 ) continue;
+                            if (ipAddress == null || ipAddress.Length < 7) continue;
 
                             ipNum = dataReader.GetInt64(1);
                             statusVal = dataReader.GetInt32(2);
@@ -569,7 +585,7 @@ public class TestSQLiteConn : MonoBehaviour {
 
     void setupTimeSlicesForIPS()
     {
-        
+
         timesliceIPSCounts = new int[timeSlices.Length];
 
 
@@ -644,7 +660,7 @@ public class TestSQLiteConn : MonoBehaviour {
 
         // First calculate the times
         TimeSpan whenStart = GetActiveTimeStart();
-        TimeSpan whenEnd = GetActiveTimeEnd();  
+        TimeSpan whenEnd = GetActiveTimeEnd();
 
         realitySessionState.SetActiveTimeRange(whenStart, whenEnd);
     }
@@ -668,12 +684,12 @@ public class TestSQLiteConn : MonoBehaviour {
 
     public float getTimeSliceFloat()
     {
-        return (float)currTimeIdx/(float) timeSlices.Length;
+        return (float)currTimeIdx / (float)timeSlices.Length;
     }
 
     void getVals()
     {
-        if (currTimeIdx >= timeSlices.Length-1 || currTimeIdx < 0 ) return;
+        if (currTimeIdx >= timeSlices.Length - 1 || currTimeIdx < 0) return;
 
         for (int i = 0; i < subnetObjects.Length; i++)
         {
@@ -695,7 +711,7 @@ public class TestSQLiteConn : MonoBehaviour {
             dbcmd.Dispose();
             dbcmd = null;
         }
-       
+
         string sql = "";
         string tableName = "networkflow";
 
@@ -743,7 +759,8 @@ public class TestSQLiteConn : MonoBehaviour {
 
         int workstationId;
 
-        if (!typeMap.TryGetValue("Workstation", out workstationId)) {
+        if (!typeMap.TryGetValue("Workstation", out workstationId))
+        {
             Debug.LogError("Could not get Workstatin type ID");
             return;
         }
@@ -778,16 +795,16 @@ public class TestSQLiteConn : MonoBehaviour {
             if (type == workstationId) currInfo.type = ipType.WORKSTATION;
             else currInfo.type = ipType.SERVER;
 
-            if( subnet > 0 && subnet < 4 )
+            if (subnet > 0 && subnet < 4)
             {
-                subnetMaps[subnet-1].Add(ipNum, currInfo);
+                subnetMaps[subnet - 1].Add(ipNum, currInfo);
             }
 
         }
 
 
 
-       
+
     }
 
     public static long getIpNumFromString(string s)
@@ -816,7 +833,7 @@ public class TestSQLiteConn : MonoBehaviour {
     {
         string[] parts = new string[4];
         long tmp = ipNum;
-        for( int i = 0; i < 4; i++ )
+        for (int i = 0; i < 4; i++)
         {
             parts[i] = "" + ((byte)(tmp & 255));
             tmp /= 256;
@@ -853,8 +870,8 @@ public class TestSQLiteConn : MonoBehaviour {
         else if (numMinutesPerSlice % 5 == 0) tableName = "nfipcount_5";
         else tableName = "nfipcount_1";
 
-        sql = "SELECT COUNT(*) FROM " + tableName + " WHERE TimeSeconds>=" + timeSlices[currTimeIdx] + 
-            " AND TimeSeconds<" + timeSlices[currTimeIdx + 1] + 
+        sql = "SELECT COUNT(*) FROM " + tableName + " WHERE TimeSeconds>=" + timeSlices[currTimeIdx] +
+            " AND TimeSeconds<" + timeSlices[currTimeIdx + 1] +
             " AND ipNum = " + ipNum + ";";
         cmd.CommandText = sql;
 
@@ -883,7 +900,7 @@ public class TestSQLiteConn : MonoBehaviour {
         status = 0;
 
         string sql;
-        if(currTimeIdx > 9)
+        if (currTimeIdx > 9)
         {
             sql = "SELECT MAX(currenttime) from bigbrother WHERE currenttime>= " + timeSlices[currTimeIdx - 10] +
                 " AND currenttime<=" + timeSlices[currTimeIdx + 1] +
@@ -893,12 +910,12 @@ public class TestSQLiteConn : MonoBehaviour {
         {
             sql = "SELECT MAX(currenttime) from bigbrother WHERE currenttime<= " + timeSlices[currTimeIdx + 1] + " AND recIpNum = " + ipNum + "; ";
         }
-        
+
         cmd.CommandText = sql;
 
 
         IDataReader reader = cmd.ExecuteReader();
-        if(reader.Read())
+        if (reader.Read())
         {
             try
             {
@@ -911,7 +928,7 @@ public class TestSQLiteConn : MonoBehaviour {
         }
         reader.Close();
 
-        if( lastTime < 0 )
+        if (lastTime < 0)
         {
             return;
         }
@@ -956,13 +973,13 @@ public class TestSQLiteConn : MonoBehaviour {
         long minTime = timeSlices[currTimeIdx] - 1000 * 60 * numMinInEachDirection;
         long maxTime = timeSlices[currTimeIdx] + 1000 * 60 * numMinInEachDirection;
 
-        
-        sql = "SELECT TimeSeconds, firstSeenSrcIp, firstSeenDestIp, srcIpNum, dstIpNum, firstSeenSrcPayloadBytes, firstSeenDestPayloadBytes, " + 
+
+        sql = "SELECT TimeSeconds, firstSeenSrcIp, firstSeenDestIp, srcIpNum, dstIpNum, firstSeenSrcPayloadBytes, firstSeenDestPayloadBytes, " +
             "firstSeenSrcPort, firstSeenDestPort FROM networkflow" +
             " WHERE (srcIpNum = " + ipNum + " OR dstIpNum = " + ipNum + ") AND TimeSeconds>=" + minTime +
             " AND TimeSeconds<=" + maxTime + ";";
-        
-       
+
+
         cmd.CommandText = sql;
 
         IDataReader reader = cmd.ExecuteReader();
@@ -996,7 +1013,7 @@ public class TestSQLiteConn : MonoBehaviour {
 
         long ipNum1 = getIpNumFromString(ipAddress1);
         long ipNum2 = getIpNumFromString(ipAddress2);
-        if (ipNum1 < 0 || ipNum2 < 0 )
+        if (ipNum1 < 0 || ipNum2 < 0)
         {
             return results;
         }
@@ -1011,7 +1028,7 @@ public class TestSQLiteConn : MonoBehaviour {
         long minTime = timeSlices[currTimeIdx] - 1000 * 60 * numMinInEachDirection;
         long maxTime = timeSlices[currTimeIdx] + 1000 * 60 * numMinInEachDirection;
 
-        sql = "SELECT TimeSeconds, firstSeenSrcIp, firstSeenDestIp, srcIpNum, dstIpNum, firstSeenSrcPayloadBytes, " + 
+        sql = "SELECT TimeSeconds, firstSeenSrcIp, firstSeenDestIp, srcIpNum, dstIpNum, firstSeenSrcPayloadBytes, " +
             "firstSeenDestPayloadBytes, firstSeenSrcPort, firstSeenDestPort FROM networkflow" +
             " WHERE TimeSeconds>=" + minTime +
             " AND TimeSeconds<=" + maxTime +
@@ -1079,7 +1096,7 @@ public class TestSQLiteConn : MonoBehaviour {
         reader.Close();
 
 
-        
+
         sql = "SELECT distinct(srcIpNum) FROM networkflow" +
             " WHERE dstIpNum = " + ipNum +
             " AND srcIpNum < 2886336512 " +
@@ -1096,7 +1113,7 @@ public class TestSQLiteConn : MonoBehaviour {
         }
 
         reader.Close();
-        
+
         return results;
     }
 

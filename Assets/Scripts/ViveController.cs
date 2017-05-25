@@ -9,6 +9,10 @@ public class ViveController : SteamVR_TrackedObject
 
     private Ray deviceRay;
     public GameObject projLineObj;
+    public bool lineAlwaysActive = false;
+
+    public Color rayLineColorStart = new Color(0.5f, 0.5f, 1.0f, 0.1f);
+    public Color rayLineColorEnd = new Color(0.5f, 0.5f, 1.0f, 0.0f);
 
     LineRenderer lineRend;
 
@@ -64,7 +68,8 @@ public class ViveController : SteamVR_TrackedObject
     ActionAreaManager actionAreaManager;
 
     // Use this for initialization
-    void Start () {
+    void Start()
+    {
 
         vrSystem = OpenVR.System;
 
@@ -87,23 +92,30 @@ public class ViveController : SteamVR_TrackedObject
         accordianManager = accordianObj.GetComponent<AccordianManager>();
 
     }
-	
-	// Update is called once per frame
-	void Update () {
+
+    // Update is called once per frame
+    void Update()
+    {
 
         Quaternion rayRotation = Quaternion.AngleAxis(rayAngle, transform.right);
         deviceRay.origin = transform.position;
         deviceRay.direction = rayRotation * transform.forward;
 
         // try to hit the various interaction objects
-        projLineObj.SetActive(false);
+        if (!lineAlwaysActive)
+        {
+            projLineObj.SetActive(false);
+        }
+        lineRend.startColor = Color.white;  // How it appears when hits something
+        lineRend.endColor = Color.white;    // How it appears when hits something
+
         tryHitObjects();
 
         updateControllerStates();
 
         if (moveSlider) updateSliderPosition();
         else if (activeMove) activeMoveScaleManager.updateMove(transform, deviceRay.origin);
-        else if( activeScale) activeMoveScaleManager.updateScale(deviceRay);
+        else if (activeScale) activeMoveScaleManager.updateScale(deviceRay);
 
     }
 
@@ -130,7 +142,7 @@ public class ViveController : SteamVR_TrackedObject
                 (prevState.ulButtonPressed & SteamVR_Controller.ButtonMask.ApplicationMenu) == 0)
             {
                 // hit the menu button
-                if( hasController )
+                if (hasController)
                 {
                     releaseController();
                 }
@@ -145,7 +157,7 @@ public class ViveController : SteamVR_TrackedObject
                 }
             }
 
-            
+
             if ((state.ulButtonPressed & SteamVR_Controller.ButtonMask.Grip) != 0 &&
                 (prevState.ulButtonPressed & SteamVR_Controller.ButtonMask.Grip) == 0)
             {
@@ -158,38 +170,38 @@ public class ViveController : SteamVR_TrackedObject
                 accordianManager.activate(pos, dir);
             }
 
-            else if((state.ulButtonPressed & SteamVR_Controller.ButtonMask.Grip) == 0 && 
+            else if ((state.ulButtonPressed & SteamVR_Controller.ButtonMask.Grip) == 0 &&
                 (prevState.ulButtonPressed & SteamVR_Controller.ButtonMask.Grip) != 0)
             {
                 accordianManager.deactivate();
             }
 
-            
+
 
 
 
             // trigger is being pressed
-            if ( (state.ulButtonPressed & SteamVR_Controller.ButtonMask.Trigger) != 0)
+            if ((state.ulButtonPressed & SteamVR_Controller.ButtonMask.Trigger) != 0)
             {
                 // trigger completely pressed
                 if (prevState.rAxis1.x < 1.0f && state.rAxis1.x >= 1.0f)
                 {
-                    
+
                     handleTriggerClick();
                 }
                 // trigger released from completely pressed
                 else if (state.rAxis1.x < 1.0f && prevState.rAxis1.x >= 1.0f)
                 {
-                
+
                     handleTriggerUnclick();
                 }
 
             }
 
-            if ((state.ulButtonPressed & SteamVR_Controller.ButtonMask.Touchpad) != 0 && 
+            if ((state.ulButtonPressed & SteamVR_Controller.ButtonMask.Touchpad) != 0 &&
                 (prevState.ulButtonPressed & SteamVR_Controller.ButtonMask.Touchpad) == 0)
             {
-                if (Mathf.Abs(state.rAxis0.y) >= Mathf.Abs(state.rAxis0.x) && state.rAxis0.y < 0.0f )
+                if (Mathf.Abs(state.rAxis0.y) >= Mathf.Abs(state.rAxis0.x) && state.rAxis0.y < 0.0f)
                 {
                     togglePlayAnimation();
                     otherControllerScript.togglePlayAnimation();
@@ -298,7 +310,7 @@ public class ViveController : SteamVR_TrackedObject
             {
                 NodeStatus ns = currNodeObject.GetComponent<NodeStatus>();
 
-                if(actionAreaManager.nodeIsActive(ns))
+                if (actionAreaManager.nodeIsActive(ns))
                 {
                     actionAreaManager.removeActiveNode(ns);
                     ns.unselectNode();
@@ -345,7 +357,7 @@ public class ViveController : SteamVR_TrackedObject
     {
         inAnimation = !inAnimation;
 
-        if( inAnimation )
+        if (inAnimation)
         {
             pauseLabel.SetActive(true);
             playLabel.SetActive(false);
@@ -375,7 +387,7 @@ public class ViveController : SteamVR_TrackedObject
             onSlider = true;
             currSliderDist = hitInfo.distance;
 
-            if ( !moveSlider)
+            if (!moveSlider)
             {
                 SliderManager timelineObj = hitInfo.collider.gameObject.GetComponent<SliderManager>();
                 currSliderScript = timelineObj.mainTimeline.GetComponent<TimelineScript>();
@@ -389,7 +401,7 @@ public class ViveController : SteamVR_TrackedObject
             currScaleQuad = null;
 
         }
-        else if(!moveSlider)
+        else if (!moveSlider)
         {
             onSlider = false;
             currSliderScript.deactivateControlLine();
@@ -410,12 +422,12 @@ public class ViveController : SteamVR_TrackedObject
             lineRend.SetPositions(linePts);
 
             GameObject obj = hitInfo.collider.gameObject;
-            if( obj.name.Equals("listLabel") )
+            if (obj.name.Equals("listLabel"))
             {
                 ns = obj.transform.parent.gameObject.GetComponent<ListLabelManager>().nodeStatus;
-                if( ns != null )
+                if (ns != null)
                 {
-                    
+
                 }
             }
             else if (obj.name.Equals("closeQuad"))
@@ -501,12 +513,23 @@ public class ViveController : SteamVR_TrackedObject
 
             stopSearching = true;
         }
-        else if( activeScale || activeMove )
+        else if (activeScale || activeMove)
         {
             projLineObj.SetActive(true);
             linePts[0] = deviceRay.origin;
             linePts[1] = deviceRay.GetPoint(currSliderDist);
             lineRend.SetPositions(linePts);
+        }
+
+        if (stopSearching) return;
+
+        if (lineAlwaysActive)
+        {
+            linePts[0] = deviceRay.origin;
+            linePts[1] = deviceRay.GetPoint(4);
+            lineRend.SetPositions(linePts);
+            lineRend.startColor = this.rayLineColorStart;
+            lineRend.endColor = this.rayLineColorEnd;
         }
 
     }
@@ -515,7 +538,7 @@ public class ViveController : SteamVR_TrackedObject
     {
         TextMesh tm = nodeStatusText.GetComponent<TextMesh>();
         string txt = "" + nodeStatus.currIpInfo.ipAddress;
-        switch(nodeStatus.currIpInfo.type)
+        switch (nodeStatus.currIpInfo.type)
         {
             case ipType.SERVER:
                 txt += " (Server)";
@@ -538,7 +561,7 @@ public class ViveController : SteamVR_TrackedObject
 
         txt += "\nBigBrother Status: ";
 
-        switch(status)
+        switch (status)
         {
             case 1:
                 txt += "Good";
