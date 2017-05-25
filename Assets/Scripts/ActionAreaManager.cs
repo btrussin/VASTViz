@@ -13,6 +13,8 @@ public struct ipTimelineDetails
     public bool isSrc;
     public int firstSeenSrcPayloadBytes;
     public int firstSeenDestPayloadBytes;
+    public int firstSeenSrcPort;
+    public int firstSeenDstPort;
 }
 
 public enum actionAreaDisplayType
@@ -24,10 +26,19 @@ public enum actionAreaDisplayType
 public class ActionAreaManager : MonoBehaviour {
 
     public GameObject listObject;
+    public GameObject extListObject;
     public GameObject listOpenObject;
     public GameObject labelTxtPrefab;
+    public GameObject labelTxtExtNodePrefab;
     public GameObject linePrefab;
     public GameObject ptPrefab;
+
+    public GameObject prevPageQuad;
+    public GameObject nextPageQuad;
+    public GameObject pageText;
+    public GameObject prevPageExtQuad;
+    public GameObject nextPageExtQuad;
+    public GameObject extPageText;
 
     public GameObject dbConnectionObject;
 
@@ -43,6 +54,7 @@ public class ActionAreaManager : MonoBehaviour {
 
     List<GameObject> nodeList = new List<GameObject>();
     Dictionary<string, NodeStatus> currentActiveNodes = new Dictionary<string, NodeStatus>();
+    Dictionary<long, string> currActiveExteriorNodes = new Dictionary<long, string>();
     List<GameObject> listLabelList = new List<GameObject>();
 
     string activeNodeIpAddress = "";
@@ -60,6 +72,11 @@ public class ActionAreaManager : MonoBehaviour {
 
     List<GameObject> acticeNodeObjects = new List<GameObject>();
 
+    Dictionary<long, HashSet<long>> exteriorNodeRefs = new Dictionary<long, HashSet<long>>();
+
+    int maxNodesPerPage = 20;
+    int currNodePage = 1;
+    int currExtNodePage = 1;
 
     // Use this for initialization
     void Start () {
@@ -205,12 +222,14 @@ public class ActionAreaManager : MonoBehaviour {
     public void openNodeList()
     {
         listObject.SetActive(true);
+        extListObject.SetActive(true);
         listOpenObject.SetActive(false);
     }
 
     public void closeNodeList()
     {
         listObject.SetActive(false);
+        extListObject.SetActive(false);
         listOpenObject.SetActive(true);
     }
 
@@ -218,20 +237,77 @@ public class ActionAreaManager : MonoBehaviour {
     {
         NodeStatus tns;
 
-        if (currentActiveNodes.Count >= 20) return;
+        ns.selectNode();
 
-        if( !currentActiveNodes.TryGetValue(ns.currIpInfo.ipAddress, out tns))
+        if ( !currentActiveNodes.TryGetValue(ns.currIpInfo.ipAddress, out tns))
         {
             currentActiveNodes.Add(ns.currIpInfo.ipAddress, ns);
         }
 
-        updateList();
-
         if( displayType == actionAreaDisplayType.SELECTED_TRAFFIC )
         {
+            long ipNum = TestSQLiteConn.getIpNumFromString(ns.currIpInfo.ipAddress);
+            List < long > extNodes = dbConnClass.getExteriorNFIpsForNode(ns.currIpInfo.ipAddress);
+            addExteriorNodeReferences(ipNum, extNodes);
+
+            updateList();
+
             updateActionAreaForSelectedTraffic();
         }
-        
+        else
+        {
+            updateList();
+        }
+    }
+
+    public bool nodeIsActive(NodeStatus ns)
+    {
+        return currentActiveNodes.ContainsKey(ns.currIpInfo.ipAddress);
+    }
+
+    void addExteriorNodeReferences(long activeIpNum, List<long> extIpNums)
+    {
+        HashSet<long> currSet;
+        foreach (long extIp in extIpNums)
+        {
+            if (exteriorNodeRefs.TryGetValue(extIp, out currSet))
+            {
+                if (!currSet.Contains(activeIpNum)) currSet.Add(activeIpNum);
+            }
+            else
+            {
+                currSet = new HashSet<long>();
+                currSet.Add(activeIpNum);
+                exteriorNodeRefs.Add(extIp, currSet);
+            }
+        }
+    }
+
+    void removeExteriorNodeReferences(long activeIpNum)
+    {
+        HashSet<long> currSet;
+        List<long> ipsToDelete = new List<long>();
+
+        foreach(KeyValuePair<long, HashSet<long>> kv in exteriorNodeRefs)
+        {
+            currSet = kv.Value;
+            if (currSet.Contains(activeIpNum))
+            {
+                currSet.Remove(activeIpNum);
+                if (currSet.Count == 0) ipsToDelete.Add(kv.Key);
+            }
+        }
+
+        string tStr;
+
+        foreach (long extIp in ipsToDelete)
+        {
+            exteriorNodeRefs.Remove(extIp);
+            if( currActiveExteriorNodes.TryGetValue(extIp, out tStr) )
+            {
+                currActiveExteriorNodes.Remove(extIp);
+            }
+        }
     }
 
     public void removeActiveNode(NodeStatus ns)
@@ -241,12 +317,17 @@ public class ActionAreaManager : MonoBehaviour {
         if (currentActiveNodes.TryGetValue(ns.currIpInfo.ipAddress, out tns))
         {
             currentActiveNodes.Remove(ns.currIpInfo.ipAddress);
+
+            if (displayType == actionAreaDisplayType.SELECTED_TRAFFIC)
+            {
+                removeExteriorNodeReferences(TestSQLiteConn.getIpNumFromString(ns.currIpInfo.ipAddress));
+            }
         }
 
         updateList();
 
         if (displayType == actionAreaDisplayType.SELECTED_TRAFFIC)
-        {
+        { 
             updateActionAreaForSelectedTraffic();
         }
         else if (displayType == actionAreaDisplayType.ALL_TRAFFIC)
@@ -261,7 +342,7 @@ public class ActionAreaManager : MonoBehaviour {
 
     public void activateSelectedNode(NodeStatus ns)
     {
-        if (!activeNodeIpAddress.Equals(ns.currIpInfo.ipAddress))
+        if (ns != null && !activeNodeIpAddress.Equals(ns.currIpInfo.ipAddress))
         {
             activeNodeIpAddress = ns.currIpInfo.ipAddress;
             updateList();
@@ -271,6 +352,34 @@ public class ActionAreaManager : MonoBehaviour {
                 updateActiveNodeForAllTraffic();
             }
         }
+    }
+
+    public void activateSelectedExteriorNode(GameObject gObj)
+    {
+        TextMesh tMesh = gObj.GetComponent<TextMesh>();
+        if (tMesh == null) return;
+
+        string ipAddress = tMesh.text;
+        long ipNum = TestSQLiteConn.getIpNumFromString(ipAddress);
+
+        string tStr;
+
+        if( currActiveExteriorNodes.TryGetValue(ipNum, out tStr) )
+        {
+            currActiveExteriorNodes.Remove(ipNum);
+        }
+        else
+        {
+            currActiveExteriorNodes.Add(ipNum, ipAddress);
+        }
+
+        updateList();
+
+        if (displayType == actionAreaDisplayType.SELECTED_TRAFFIC)
+        {
+            updateActionAreaForSelectedTraffic();
+        }
+
     }
 
     public void updateList()
@@ -285,26 +394,50 @@ public class ActionAreaManager : MonoBehaviour {
         Vector3 offset = new Vector3(0.0f, 0.0f, -0.01f);
         Vector3 yOffsetInc = listObject.transform.up * -0.05f;
 
-        if ( currentActiveNodes.Count < 1 )
-        {
-            GameObject txtObj = (GameObject)Instantiate(labelTxtPrefab);
-            ListLabelManager man = txtObj.GetComponent<ListLabelManager>();
-            man.nodeStatus = null;
+        int numNodes = currentActiveNodes.Count;
+        int numExtNodes = exteriorNodeRefs.Count;
 
-            txtObj.transform.SetParent(listObject.transform);
 
-            txtObj.transform.position = listObject.transform.position;
-            txtObj.transform.rotation = listObject.transform.rotation;
 
-            listLabelList.Add(txtObj);
+        Debug.Log("Curr Page before logic: " + currNodePage);
 
-            return;
-        }
+        int maxPage = (numNodes + maxNodesPerPage - 1) / maxNodesPerPage;
 
-        //float yOffsetInc = -0.05f;
+        if (currNodePage < 1) currNodePage = 1;
+        else if (currNodePage > maxPage) currNodePage = maxPage;
+
+        Debug.Log("Curr Page after logic: " + currNodePage);
+
+        // update the page label and arrows
+        TextMesh tMesh = pageText.GetComponent<TextMesh>();
+        if(numNodes < 1) tMesh.text = "empty";
+        else tMesh.text = "Page " + currNodePage + " of " + maxPage;
+
+        MeshRenderer prevMeshRend = prevPageQuad.GetComponent<MeshRenderer>();
+        MeshRenderer nextMeshRend = nextPageQuad.GetComponent<MeshRenderer>();
+
+        if (currNodePage == 1) prevMeshRend.material.color = Color.gray;
+        else prevMeshRend.material.color = Color.white;
+
+        if (currNodePage == maxPage) nextMeshRend.material.color = Color.gray;
+        else nextMeshRend.material.color = Color.white;
+
+
+
+
+
+
+
+        int firstIdx = (currNodePage-1)* maxNodesPerPage + 1;
+        int lastIdx = firstIdx + maxNodesPerPage;
+        int currIdx = 0;
         
         foreach(KeyValuePair<string, NodeStatus> entry in currentActiveNodes )
         {
+            currIdx++;
+            if (currIdx < firstIdx) continue;
+            else if (currIdx >= lastIdx) break;
+
             GameObject txtObj = (GameObject)Instantiate(labelTxtPrefab);
             ListLabelManager man = txtObj.GetComponent<ListLabelManager>();
             man.nodeStatus = entry.Value;
@@ -327,6 +460,64 @@ public class ActionAreaManager : MonoBehaviour {
             offset += yOffsetInc;
 
         }
+
+
+
+
+        offset = new Vector3(0.0f, 0.0f, -0.01f);
+
+        maxPage = (numExtNodes + maxNodesPerPage - 1) / maxNodesPerPage;
+
+        if (currExtNodePage < 1) currExtNodePage = 1;
+        else if (currExtNodePage > maxPage) currExtNodePage = maxPage;
+
+        // update the external page label and arrows
+        tMesh = extPageText.GetComponent<TextMesh>();
+        if (numNodes < 1) tMesh.text = "empty";
+        else tMesh.text = "Page " + currExtNodePage + " of " + maxPage;
+
+        prevMeshRend = prevPageExtQuad.GetComponent<MeshRenderer>();
+        nextMeshRend = nextPageExtQuad.GetComponent<MeshRenderer>();
+
+        if (currExtNodePage == 1) prevMeshRend.material.color = Color.gray;
+        else prevMeshRend.material.color = Color.white;
+
+        if (currExtNodePage == maxPage) nextMeshRend.material.color = Color.gray;
+        else nextMeshRend.material.color = Color.white;
+
+        firstIdx = (currExtNodePage - 1) * maxNodesPerPage + 1;
+        lastIdx = firstIdx + maxNodesPerPage;
+        currIdx = 0;
+
+        foreach (long key in exteriorNodeRefs.Keys)
+        {
+            currIdx++;
+            if (currIdx < firstIdx) continue;
+            else if (currIdx >= lastIdx) break;
+
+            GameObject txtObj = (GameObject)Instantiate(labelTxtExtNodePrefab);
+            ListLabelManager man = txtObj.GetComponent<ListLabelManager>();
+            man.nodeStatus = null;
+
+            TextMesh mesh = man.labelText.GetComponent<TextMesh>();
+            mesh.text = TestSQLiteConn.getIpStringFromLong(key);
+
+            if( currActiveExteriorNodes.ContainsKey(key) ) mesh.color = Color.yellow;
+
+            txtObj.transform.SetParent(extListObject.transform);
+
+            listLabelList.Add(txtObj);
+
+            txtObj.transform.position = extListObject.transform.position + offset;
+            txtObj.transform.rotation = extListObject.transform.rotation;
+
+            offset += yOffsetInc;
+
+        }
+
+
+
+
     }
 
     public void updateActiveNodeForAllTraffic()
@@ -375,13 +566,6 @@ public class ActionAreaManager : MonoBehaviour {
 
                 nodeDetailsLists[tgtIdx].Add(details);
             }
-
-            /*
-            Debug.Log("Sub1: " + nodeDetailsLists[0].Count +
-                "\tSub2: " + nodeDetailsLists[1].Count +
-                "\tSub3: " + nodeDetailsLists[2].Count +
-                "\tInternet: " + nodeDetailsLists[3].Count);    
-            */
         }
 
 
@@ -475,7 +659,10 @@ public class ActionAreaManager : MonoBehaviour {
                     numOuterPointsUnassigned--;
                 }
 
-                tpArray[tpIdx++] = new timePosition(det.time, gameObject.transform.TransformPoint(pos + offset));
+                tpArray[tpIdx] = new timePosition(det.time, gameObject.transform.TransformPoint(pos + offset));
+                tpArray[tpIdx].srcPort = det.firstSeenSrcPort;
+                tpArray[tpIdx].dstPort = det.firstSeenDstPort;
+                tpIdx++;
 
                 GameObject ptObj = (GameObject)Instantiate(ptPrefab);
                 ptObj.transform.SetParent(gameObject.transform);
@@ -507,6 +694,7 @@ public class ActionAreaManager : MonoBehaviour {
             LineRenderer lineRend = lineObj.GetComponent<LineRenderer>();
             lineRend.useWorldSpace = false;
             lineRend.SetPositions(tmpPts);
+            lineRend.startWidth = 0.1f;
 
             acticeNodeObjects.Add(lineObj);
         }
@@ -551,17 +739,22 @@ public class ActionAreaManager : MonoBehaviour {
             nodeDetailsLists[i].Clear();
         }
 
+        int totalCount = currentActiveNodes.Count + currActiveExteriorNodes.Count;
 
+        if (totalCount < 2) return;
 
-        if (currentActiveNodes.Count < 2) return;
-
-        string[] uniqueIpAddresses = new string[currentActiveNodes.Count];
+        string[] uniqueIpAddresses = new string[totalCount];
 
         int idx = 0;
 
         foreach( KeyValuePair<string, NodeStatus> kv in currentActiveNodes )
         {
             uniqueIpAddresses[idx++] = kv.Key;
+        }
+
+        foreach (KeyValuePair<long, string> kv in currActiveExteriorNodes)
+        {
+            uniqueIpAddresses[idx++] = kv.Value;
         }
 
         List<ipTimelineDetails> detTraffList = new List<ipTimelineDetails>();
@@ -641,6 +834,8 @@ public class ActionAreaManager : MonoBehaviour {
 
             timePosition tmpTp = new timePosition();
             tmpTp.time = det.time;
+            tmpTp.srcPort = det.firstSeenSrcPort;
+            tmpTp.dstPort = det.firstSeenDstPort;
 
             for (int i = 0; i < 2; i++)
             {
@@ -697,6 +892,8 @@ public class ActionAreaManager : MonoBehaviour {
             LineRenderer lineRend = lineObj.GetComponent<LineRenderer>();
             lineRend.useWorldSpace = false;
             lineRend.SetPositions(tmpPts);
+            lineRend.startWidth = 0.008f;
+            lineRend.endWidth = 0.008f;
 
             acticeNodeObjects.Add(lineObj);
         }
@@ -716,10 +913,9 @@ public class ActionAreaManager : MonoBehaviour {
 
                 LineRenderer lineRend = lineObj.GetComponent<LineRenderer>();
                 lineRend.useWorldSpace = false;
-                //lineRend.numPositions = 2;
                 lineRend.SetPositions(tmpLinePts);
-                //lineRend.startColor = Color.white;
-                //lineRend.endColor = Color.white;
+                lineRend.startColor = getPortColor(tp.srcPort);
+                lineRend.endColor = getPortColor(tp.dstPort);
 
                 acticeNodeObjects.Add(lineObj);
             }
@@ -728,6 +924,49 @@ public class ActionAreaManager : MonoBehaviour {
         }
         
     }
+
+    Color getPortColor(int port)
+    {
+        Color result = Color.white;
+        switch (port)
+        {
+            case 21:
+                result = Color.red;
+                break;
+            case 23:
+                result = Color.green;
+                break;
+            case 80:
+                result = Color.yellow;
+                break;
+        }
+
+        return result;
+    }
+
+    public void nextNodePage()
+    {
+        currNodePage++;
+        updateList();
+    }
+
+    public void prevNodePage()
+    {
+        currNodePage--;
+        updateList();
+    }
+
+    public void nextExtNodePage()
+    {
+        currExtNodePage++;
+        updateList();
+    }
+
+    public void prevExtNodePage()
+    {
+        currExtNodePage--;
+        updateList();
+    }
 }
 
 class timePosition : IComparable<timePosition>
@@ -735,6 +974,8 @@ class timePosition : IComparable<timePosition>
     public double time;
     public Vector3 srcPosition;
     public Vector3 dstPosition;
+    public int srcPort;
+    public int dstPort;
 
     public timePosition(){}
 

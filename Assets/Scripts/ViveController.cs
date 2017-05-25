@@ -273,15 +273,40 @@ public class ViveController : SteamVR_TrackedObject
                 else if (hitObj.name.Equals("listLabel"))
                 {
                     NodeStatus ns = hitObj.transform.parent.gameObject.GetComponent<ListLabelManager>().nodeStatus;
-                    actionAreaManager.activateSelectedNode(ns);
+                    if (ns != null) actionAreaManager.activateSelectedNode(ns);
+                    else actionAreaManager.activateSelectedExteriorNode(hitObj);
+                }
+                else if (hitObj.name.Equals("prevPage"))
+                {
+                    actionAreaManager.prevNodePage();
+                }
+                else if (hitObj.name.Equals("nextPage"))
+                {
+                    actionAreaManager.nextNodePage();
+                }
+                else if (hitObj.name.Equals("prevPageExt"))
+                {
+                    actionAreaManager.prevExtNodePage();
+                }
+                else if (hitObj.name.Equals("nextPageExt"))
+                {
+                    actionAreaManager.nextExtNodePage();
                 }
             }
 
             else if (Physics.Raycast(deviceRay.origin, deviceRay.direction, out hitInfo, 30.0f, nodesMask))
             {
                 NodeStatus ns = currNodeObject.GetComponent<NodeStatus>();
-                actionAreaManager.addActiveNode(ns);
-                ns.selectNode();
+
+                if(actionAreaManager.nodeIsActive(ns))
+                {
+                    actionAreaManager.removeActiveNode(ns);
+                    ns.unselectNode();
+                }
+                else
+                {
+                    actionAreaManager.addActiveNode(ns);
+                }
             }
 
 

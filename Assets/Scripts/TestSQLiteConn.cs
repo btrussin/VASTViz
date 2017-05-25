@@ -782,6 +782,19 @@ public class TestSQLiteConn : MonoBehaviour {
         }
     }
 
+    public static string getIpStringFromLong(long ipNum)
+    {
+        string[] parts = new string[4];
+        long tmp = ipNum;
+        for( int i = 0; i < 4; i++ )
+        {
+            parts[i] = "" + ((byte)(tmp & 255));
+            tmp /= 256;
+        }
+
+        return parts[3] + "." + parts[2] + "." + parts[1] + "." + parts[0];
+    }
+
     void OnDestroy()
     {
         dbconn.Close();
@@ -914,7 +927,8 @@ public class TestSQLiteConn : MonoBehaviour {
         long maxTime = timeSlices[currTimeIdx] + 1000 * 60 * numMinInEachDirection;
 
         
-        sql = "SELECT TimeSeconds, firstSeenSrcIp, firstSeenDestIp, srcIpNum, dstIpNum, firstSeenSrcPayloadBytes, firstSeenDestPayloadBytes FROM networkflow" +
+        sql = "SELECT TimeSeconds, firstSeenSrcIp, firstSeenDestIp, srcIpNum, dstIpNum, firstSeenSrcPayloadBytes, firstSeenDestPayloadBytes, " + 
+            "firstSeenSrcPort, firstSeenDestPort FROM networkflow" +
             " WHERE (srcIpNum = " + ipNum + " OR dstIpNum = " + ipNum + ") AND TimeSeconds>=" + minTime +
             " AND TimeSeconds<=" + maxTime + ";";
         
@@ -934,6 +948,8 @@ public class TestSQLiteConn : MonoBehaviour {
                 tmpData.dstIpNum = reader.GetInt64(4);
                 tmpData.firstSeenSrcPayloadBytes = reader.GetInt32(5);
                 tmpData.firstSeenDestPayloadBytes = reader.GetInt32(6);
+                tmpData.firstSeenSrcPort = reader.GetInt32(7);
+                tmpData.firstSeenDstPort = reader.GetInt32(8);
 
                 results.Add(tmpData);
             }
@@ -950,7 +966,7 @@ public class TestSQLiteConn : MonoBehaviour {
 
         long ipNum1 = getIpNumFromString(ipAddress1);
         long ipNum2 = getIpNumFromString(ipAddress2);
-        if (ipNum1 < 0 || ipNum2 < 0 )
+        if (ipNum1 < 0 || ipNum2 < 0)
         {
             return results;
         }
@@ -965,7 +981,8 @@ public class TestSQLiteConn : MonoBehaviour {
         long minTime = timeSlices[currTimeIdx] - 1000 * 60 * numMinInEachDirection;
         long maxTime = timeSlices[currTimeIdx] + 1000 * 60 * numMinInEachDirection;
 
-        sql = "SELECT TimeSeconds, firstSeenSrcIp, firstSeenDestIp, srcIpNum, dstIpNum, firstSeenSrcPayloadBytes, firstSeenDestPayloadBytes FROM networkflow" +
+        sql = "SELECT TimeSeconds, firstSeenSrcIp, firstSeenDestIp, srcIpNum, dstIpNum, firstSeenSrcPayloadBytes, " + 
+            "firstSeenDestPayloadBytes, firstSeenSrcPort, firstSeenDestPort FROM networkflow" +
             " WHERE TimeSeconds>=" + minTime +
             " AND TimeSeconds<=" + maxTime +
         " AND ( (srcIpNum = " + ipNum1 + " AND dstIpNum = " + ipNum2 + " ) OR (srcIpNum = " + ipNum2 + " AND dstIpNum = " + ipNum1 + " ) );";
@@ -982,6 +999,8 @@ public class TestSQLiteConn : MonoBehaviour {
             tmpData.dstIpNum = reader.GetInt64(4);
             tmpData.firstSeenSrcPayloadBytes = reader.GetInt32(5);
             tmpData.firstSeenDestPayloadBytes = reader.GetInt32(6);
+            tmpData.firstSeenSrcPort = reader.GetInt32(7);
+            tmpData.firstSeenDstPort = reader.GetInt32(8);
 
             results.Add(tmpData);
         }
@@ -989,6 +1008,65 @@ public class TestSQLiteConn : MonoBehaviour {
         reader.Close();
 
 
+        return results;
+    }
+
+
+    public List<long> getExteriorNFIpsForNode(string ipAddress)
+    {
+        List<long> results = new List<long>();
+
+        long ipNum = getIpNumFromString(ipAddress);
+        if (ipNum < 0)
+        {
+            return results;
+        }
+
+        IDbCommand cmd = dbconn.CreateCommand();
+
+        string sql = "";
+
+        int numMinInEachDirection = 60;
+
+        // go numMinInEachDirection in each direction +/- 1000 * 60 * numMinInEachDirection
+        long minTime = timeSlices[currTimeIdx] - 1000 * 60 * numMinInEachDirection;
+        long maxTime = timeSlices[currTimeIdx] + 1000 * 60 * numMinInEachDirection;
+
+        sql = "SELECT distinct(dstIpNum) FROM networkflow" +
+            " WHERE srcIpNum = " + ipNum +
+            " AND dstIpNum < 2886336512 " +
+            " AND TimeSeconds>= " + minTime +
+            " AND TimeSeconds<=" + maxTime + "; ";
+
+        cmd.CommandText = sql;
+
+        IDataReader reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            results.Add(reader.GetInt64(0));
+        }
+
+        reader.Close();
+
+
+        
+        sql = "SELECT distinct(srcIpNum) FROM networkflow" +
+            " WHERE dstIpNum = " + ipNum +
+            " AND srcIpNum < 2886336512 " +
+            " AND TimeSeconds>= " + minTime +
+            " AND TimeSeconds<=" + maxTime + "; ";
+
+        cmd = dbconn.CreateCommand();
+        cmd.CommandText = sql;
+
+        reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            results.Add(reader.GetInt64(0));
+        }
+
+        reader.Close();
+        
         return results;
     }
 
