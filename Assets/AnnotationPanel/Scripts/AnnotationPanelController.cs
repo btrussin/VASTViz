@@ -4,35 +4,23 @@ using UnityEngine.UI;
 using System;
 using System.Threading;
 using System.IO;
+using RealityCheckData;
 
 namespace AnnotationPanel
 {
     public class AnnotationPanelController : MonoBehaviour, RealityCheck.ITimeRangeListener
     {
-        public string annotationPanelDataPath = "E:\\groundTruth.json";
         public bool showFullDetails = false;
+        public GroundTruthModelManager groundTruthModelManager;
 
         TimeSpan? _timeRangeStart;
         TimeSpan? _timeRangeEnd;
 
-        DataModel _dataModel = new DataModel();
         bool _waitingForData = true;
         bool _contentDirty = true;      // General flag indicating that the text content should be regenerated
 
         List<AnnotationRecord> _activeRecords = new List<AnnotationRecord>();
-
-        public GroundTruthModel groundTruthModel
-        {
-            get
-            {
-                if (_dataModel.dataLoadComplete)
-                {
-                    return _dataModel.groundTruthModel;
-                }
-                return null;
-            }
-        }
-
+        
         public void SetActiveTimeRange(TimeSpan? timeStart, TimeSpan? timeEnd)
         {
             if (TimeSpan.Equals(timeStart, this._timeRangeStart) && TimeSpan.Equals(timeEnd, this._timeRangeEnd))
@@ -49,8 +37,6 @@ namespace AnnotationPanel
         // Use this for initialization
         void Start()
         {
-            string backupDataPath = Directory.GetParent(Application.dataPath).FullName + "/groundTruth.json";
-            _dataModel.Initialize(annotationPanelDataPath, backupDataPath);
         }
 
         // Update is called once per frame
@@ -63,7 +49,7 @@ namespace AnnotationPanel
             }
             if (_waitingForData)
             {
-                if (_dataModel.dataLoadComplete)
+                if (groundTruthModelManager.dataLoadComplete)
                 {
                     // At this point, we now have the data loaded, so we can do whatever
                     // initialization we need to do based on the data. (Enable buttons, etc)
@@ -122,18 +108,22 @@ namespace AnnotationPanel
 
         string GenerateTextContent()
         {
+            if (groundTruthModelManager == null)
+            {
+                return "<color=red>Need to connect to GroundTruthModelManager</color>";
+            }
             string result = "";
             if (_timeRangeStart == null && _timeRangeEnd == null)
             {
                 // Note that no active time range and show stats.
                 result = "<i>Note: No active time range set.</i>\r\n\r\n";
-                if (!_dataModel.dataLoadComplete)
+                if (!groundTruthModelManager.dataLoadComplete)
                 {
                     result += "Loading data...";
                 }
                 else
                 {
-                    result += "<b>Number of loaded annotations</b>: " + _dataModel.groundTruthModel.annotations.Count;
+                    result += "<b>Number of loaded annotations</b>: " + groundTruthModelManager.groundTruthModel.annotations.Count;
                 }
                 return result;
             }
@@ -280,7 +270,7 @@ namespace AnnotationPanel
             long msNearStart = msStart - (6 * 60 * 60 * 1000);  // 6 hours before window
             long msNearEnd = msEnd + (6 * 60 * 60 * 1000);  // 6 hours before window
 
-            foreach (AnnotationRecord rec in _dataModel.groundTruthModel.annotations)
+            foreach (AnnotationRecord rec in groundTruthModelManager.groundTruthModel.annotations)
             {
                 if (TimeRangeContains(msStart, msEnd, rec.timeStart, rec.timeEnd))
                 {
@@ -313,42 +303,6 @@ namespace AnnotationPanel
             }
 
             return true;
-        }
-    }
-
-
-    /// <summary>
-    /// Contains all of relevant data for the panel.
-    /// </summary>
-    class DataModel
-    {
-        public bool dataLoadComplete = false;
-        public GroundTruthModel groundTruthModel;
-
-        private Thread thread;
-        private string dataPath;
-        private string backupDataPath;
-
-        public void Initialize(string dataPath, string backupDataPath)
-        {
-            if (thread == null)
-            {
-                this.dataPath = dataPath;
-                this.backupDataPath = backupDataPath;
-                thread = new Thread(new ThreadStart(this.LoadDataModel));
-                thread.Start();
-            }
-        }
-
-        void LoadDataModel()
-        {
-            groundTruthModel = new AnnotationModelManager().LoadGroundTruthModel(dataPath);
-            if (groundTruthModel == null)
-            {
-                groundTruthModel = new AnnotationModelManager().LoadGroundTruthModel(backupDataPath);
-            }
-            dataLoadComplete = true;
-            thread = null;
         }
     }
 }
