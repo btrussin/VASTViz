@@ -63,8 +63,20 @@ public class TestSQLiteConn : MonoBehaviour
     long[] minSubnetIpNum = new long[3];
     long[] maxSubnetIpNum = new long[3];
 
-    long minUTCTime = 1364802600; // first minute: 1364802600:  04-01-2013 07:50:00
-    long maxUTCTime = 1366045200; // last minute: 1366045200: 04-15-2013 17:00:00
+    public long minUTCTime
+    {
+        get
+        {
+            return 1364802600; // first minute: 1364802600:  04-01-2013 07:50:00
+        }
+    }
+    public long maxUTCTime
+    {
+        get
+        {
+            return 1366045200; // last minute: 1366045200: 04-15-2013 17:00:00
+        }
+    }
 
     long[] timeSlices;
     int[] timesliceNFCounts;

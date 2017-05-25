@@ -11,16 +11,21 @@ namespace RealityCheckData
     {
         public string groundTruthDataPath = "E:\\groundTruth.json";
 
+        private bool _dataLoadComplete = false;
+        private GroundTruthModel _groundTruthModel;
 
-        DataModelRetriever _dataModelRetriever = new DataModelRetriever();
+        private Thread thread;
+        private string dataPath;
+        private string backupDataPath;
+
 
         public GroundTruthModel groundTruthModel
         {
             get
             {
-                if (_dataModelRetriever.dataLoadComplete)
+                if (_dataLoadComplete)
                 {
-                    return _dataModelRetriever.groundTruthModel;
+                    return _groundTruthModel;
                 }
                 return null;
             }
@@ -29,7 +34,7 @@ namespace RealityCheckData
         {
             get
             {
-                return _dataModelRetriever.dataLoadComplete;
+                return _dataLoadComplete;
             }
         }
 
@@ -47,9 +52,31 @@ namespace RealityCheckData
         void Start()
         {
             string backupDataPath = Directory.GetParent(Application.dataPath).FullName + "/groundTruth.json";
-            _dataModelRetriever.Initialize(groundTruthDataPath, backupDataPath);
+            Initialize(groundTruthDataPath, backupDataPath);
         }
 
+
+        private void Initialize(string dataPath, string backupDataPath)
+        {
+            if (thread == null)
+            {
+                this.dataPath = dataPath;
+                this.backupDataPath = backupDataPath;
+                thread = new Thread(new ThreadStart(this.LoadDataModel));
+                thread.Start();
+            }
+        }
+
+        private void LoadDataModel()
+        {
+            _groundTruthModel = LoadGroundTruthModel(dataPath);
+            if (groundTruthModel == null)
+            {
+                _groundTruthModel = LoadGroundTruthModel(backupDataPath);
+            }
+            _dataLoadComplete = true;
+            thread = null;
+        }
     }
 
     [Serializable]
@@ -77,38 +104,4 @@ namespace RealityCheckData
         public List<string> ports = new List<string>();
     }
 
-    /// <summary>
-    /// Contains all of relevant data for the ground truth annotation stuff.
-    /// </summary>
-    class DataModelRetriever
-    {
-        public bool dataLoadComplete = false;
-        public GroundTruthModel groundTruthModel;
-
-        private Thread thread;
-        private string dataPath;
-        private string backupDataPath;
-
-        public void Initialize(string dataPath, string backupDataPath)
-        {
-            if (thread == null)
-            {
-                this.dataPath = dataPath;
-                this.backupDataPath = backupDataPath;
-                thread = new Thread(new ThreadStart(this.LoadDataModel));
-                thread.Start();
-            }
-        }
-
-        void LoadDataModel()
-        {
-            groundTruthModel = new GroundTruthModelManager().LoadGroundTruthModel(dataPath);
-            if (groundTruthModel == null)
-            {
-                groundTruthModel = new GroundTruthModelManager().LoadGroundTruthModel(backupDataPath);
-            }
-            dataLoadComplete = true;
-            thread = null;
-        }
-    }
 }
