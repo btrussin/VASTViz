@@ -79,23 +79,39 @@ namespace AnnotationTimeline
             //---------------------------------
             // Partition
             {
-                Transform parentTransform = timeline.baseLine.transform;
-                GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                go.transform.position = new Vector3(parentTransform.position.x, parentTransform.position.y - 0.01f, parentTransform.position.z + 0.025f);
-                go.transform.localScale = new Vector3(parentTransform.localScale.x, 0.01f, 0.05f);
-                go.transform.parent = parentTransform;
+                //Transform parentTransform = timeline.baseLine.transform;
+                //GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                //go.transform.position = new Vector3(parentTransform.position.x, parentTransform.position.y - 0.01f, parentTransform.position.z + 0.025f);
+                //go.transform.localScale = new Vector3(parentTransform.localScale.x, 0.01f, 0.05f);
+                //go.transform.parent = parentTransform;
             }
             //---------------------------------
 
-
+            List<AnnotationRecord> sortedList = new List<AnnotationRecord>();
+            sortedList.AddRange(groundTruthModelManager.groundTruthModel.annotations);
+            sortedList.Sort(delegate (AnnotationRecord rec1, AnnotationRecord rec2)
+            {
+                long diff1 = rec1.timeEnd - rec1.timeStart;
+                long diff2 = rec2.timeEnd - rec2.timeStart;
+                if (diff1 > diff2)
+                {
+                    return -1;
+                }
+                if (diff1 < diff2)
+                {
+                    return 1;
+                }
+                return (int)(rec1.timeStart - rec2.timeStart);
+            });
             // Create a series of blocks along the base of the timeline representing the events
-            foreach (AnnotationRecord rec in groundTruthModelManager.groundTruthModel.annotations)
+            foreach (AnnotationRecord rec in sortedList)
             {
                 CreateEventMarker(rec);
             }
-            
+
         }
 
+        
         void CreateEventMarker(AnnotationRecord rec)
         {
             if (rec == null)
@@ -103,16 +119,47 @@ namespace AnnotationTimeline
                 return;
             }
             Transform parentTransform = timeline.baseLine.transform;
+            long t1 = rec.timeStart / 1000;
+            long t2 = rec.timeEnd / 1000;
+            long fullRangeDiff = this.maxUTCTime - this.minUTCTime;
+            long eventDiff = t2 - t1;
+            long offset = ((t2 - this.minUTCTime) + (t1 - this.minUTCTime)) / 2;
+            float scaleX = ((float)eventDiff) / (float)fullRangeDiff;
+            float offsetX = (((float)offset) / (float)fullRangeDiff) - 0.5f;
 
-            // TODO: calculate position and scale
-            /*
-            
+            if (scaleX <= 0)
+            {
+                scaleX = 0.01f;
+            }
+
             GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.transform.position = new Vector3(parentTransform.position.x + positionX, parentTransform.position.y - 0.02f, parentTransform.position.z + 0.025f);
+            go.transform.position = new Vector3(parentTransform.position.x + offsetX, parentTransform.position.y - 0.01f, parentTransform.position.z + 0.025f);
             go.transform.localScale = new Vector3(parentTransform.localScale.x * (float)scaleX, 0.01f, 0.05f);
             go.transform.parent = parentTransform;
 
-            */
+            bool foundOverlap = isOverlappingExistingMarker(go);
+            int loopEscape = 0;
+            while (foundOverlap && loopEscape < 6)
+            {
+                go.transform.Translate(0, -0.011f, 0);
+                foundOverlap = isOverlappingExistingMarker(go);
+                loopEscape++;
+            }
+
+            markers.Add(go);
+        }
+
+        bool isOverlappingExistingMarker(GameObject go)
+        {
+            Bounds testBounds = go.GetComponent<Renderer>().bounds;
+            foreach (GameObject marker in markers)
+            {
+                if (marker.GetComponent<Renderer>().bounds.Intersects(testBounds))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 
