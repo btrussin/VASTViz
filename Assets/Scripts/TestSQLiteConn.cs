@@ -142,10 +142,10 @@ public class TestSQLiteConn : MonoBehaviour
         string conn = this.databaseURI;
         if (checkBasePathForDB)
         {
-            string testPath = Directory.GetParent(Application.dataPath).FullName + "/vast.db";
+            string testPath = Directory.GetParent(Application.dataPath).FullName + "\\vast.db";
             if (File.Exists(testPath))
             {
-                conn = "file:" + testPath;
+                conn = "URI=file:" + testPath;
             }
         }
 
