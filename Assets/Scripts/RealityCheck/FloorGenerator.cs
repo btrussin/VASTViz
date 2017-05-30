@@ -1,6 +1,6 @@
 ﻿
 
-﻿//--------------------------------------------------------------
+//--------------------------------------------------------------
 // Purpose: draw a floor area for the VR chaperone area.
 //--------------------------------------------------------------
 
@@ -294,43 +294,44 @@ namespace RealityCheck
             Vector3 c1 = new Vector3(corners[2].v0, borderBumpHeight, corners[2].v2);
             Vector3 d1 = new Vector3(corners[3].v0, borderBumpHeight, corners[3].v2);
 
+            float heightUVOffset = borderBumpHeight;
             for (int i = 0; i < 2; i++)
             {
                 vertices.Add(a);
-                uvs.Add(new Vector2(a.x, a.y));
+                uvs.Add(new Vector2(a.x, a.z - heightUVOffset));
                 vertices.Add(b);
-                uvs.Add(new Vector2(b.x, b.y));
+                uvs.Add(new Vector2(b.x, b.z - heightUVOffset));
                 vertices.Add(a1);
-                uvs.Add(new Vector2(a1.x, a1.y));
+                uvs.Add(new Vector2(a1.x, a1.z));
                 vertices.Add(b1);
-                uvs.Add(new Vector2(b1.x, b1.y));
+                uvs.Add(new Vector2(b1.x, b1.z));
 
                 vertices.Add(b);
-                uvs.Add(new Vector2(b.z, b.y));
+                uvs.Add(new Vector2(b.x + heightUVOffset, b.z));
                 vertices.Add(c);
-                uvs.Add(new Vector2(c.z, c.y));
+                uvs.Add(new Vector2(c.x + heightUVOffset, c.z));
                 vertices.Add(b1);
-                uvs.Add(new Vector2(b1.z, b1.y));
+                uvs.Add(new Vector2(b1.x, b1.z));
                 vertices.Add(c1);
-                uvs.Add(new Vector2(c1.z, c1.y));
+                uvs.Add(new Vector2(c1.x, c1.z));
 
                 vertices.Add(c);
-                uvs.Add(new Vector2(c.x, c.y));
+                uvs.Add(new Vector2(c.x, c.z + heightUVOffset));
                 vertices.Add(d);
-                uvs.Add(new Vector2(d.x, d.y));
+                uvs.Add(new Vector2(d.x, d.z + heightUVOffset));
                 vertices.Add(c1);
-                uvs.Add(new Vector2(c1.x, c1.y));
+                uvs.Add(new Vector2(c1.x, c1.z));
                 vertices.Add(d1);
-                uvs.Add(new Vector2(d1.x, d1.y));
+                uvs.Add(new Vector2(d1.x, d1.z));
 
                 vertices.Add(d);
-                uvs.Add(new Vector2(d.z, d.y));
+                uvs.Add(new Vector2(d.x - heightUVOffset, d.z));
                 vertices.Add(a);
-                uvs.Add(new Vector2(a.z, a.y));
+                uvs.Add(new Vector2(a.x - heightUVOffset, a.z));
                 vertices.Add(d1);
-                uvs.Add(new Vector2(d1.z, d1.y));
+                uvs.Add(new Vector2(d1.x, d1.z));
                 vertices.Add(a1);
-                uvs.Add(new Vector2(a1.z, a1.y));
+                uvs.Add(new Vector2(a1.x, a1.z));
 
                 // For the second round, adjust the coordinates to the outside 
                 a = new Vector3(corners[0].v0 + r, 0f, corners[0].v2 - r);
@@ -342,6 +343,8 @@ namespace RealityCheck
                 b1 = new Vector3(corners[1].v0 - r, borderBumpHeight, corners[1].v2 - r);
                 c1 = new Vector3(corners[2].v0 - r, borderBumpHeight, corners[2].v2 + r);
                 d1 = new Vector3(corners[3].v0 + r, borderBumpHeight, corners[3].v2 + r);
+
+                heightUVOffset = -borderBumpHeight;
             }
 
             int[] facesTemp = new int[]
@@ -357,7 +360,7 @@ namespace RealityCheck
 
                 16, 17, 18,
                 17, 19, 18,
-                
+
                 20, 21, 22,
                 21, 23, 22,
 
