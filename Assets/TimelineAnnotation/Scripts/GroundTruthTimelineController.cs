@@ -10,6 +10,8 @@ namespace AnnotationTimeline
     {
         public GroundTruthModelManager groundTruthModelManager;
         public TimelineScript timeline;
+        [Tooltip("Material that will be used for the markers along the timeline")]
+        public Material eventMaterial;
 
         TimeSpan? _timeRangeStart;
         TimeSpan? _timeRangeEnd;
@@ -103,50 +105,83 @@ namespace AnnotationTimeline
                 }
                 return (int)(rec1.timeStart - rec2.timeStart);
             });
+
             // Create a series of blocks along the base of the timeline representing the events
+            List<GameObject> objsToRotate = new List<GameObject>();
             foreach (AnnotationRecord rec in sortedList)
             {
-                CreateEventMarker(rec);
+                bool shouldRotate;
+                GameObject obj = CreateEventMarker(rec, out shouldRotate);
+                if (obj != null && shouldRotate)
+                {
+                    objsToRotate.Add(obj);
+                }
             }
-
+            foreach(GameObject obj in objsToRotate)
+            {
+                obj.transform.localScale = new Vector3(obj.transform.localScale.x * 0.8f, obj.transform.localScale.y * 0.8f, obj.transform.localScale.z);
+                obj.transform.Rotate(0, 0, 45, Space.Self);
+            }
         }
 
         
-        void CreateEventMarker(AnnotationRecord rec)
+        GameObject CreateEventMarker(AnnotationRecord rec, out bool shouldRotate)
         {
             if (rec == null)
             {
-                return;
+                shouldRotate = false;
+                return null;
             }
+
             Transform parentTransform = timeline.baseLine.transform;
             long t1 = rec.timeStart / 1000;
             long t2 = rec.timeEnd / 1000;
+
+            if (t2 < minUTCTime)
+            {
+                shouldRotate = false;
+                return null;
+            }
             long fullRangeDiff = this.maxUTCTime - this.minUTCTime;
             long eventDiff = t2 - t1;
             long offset = ((t2 - this.minUTCTime) + (t1 - this.minUTCTime)) / 2;
             float scaleX = ((float)eventDiff) / (float)fullRangeDiff;
             float offsetX = (((float)offset) / (float)fullRangeDiff) - 0.5f;
 
+            GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            if (eventMaterial != null)
+            {
+                Renderer renderer = go.GetComponent<Renderer>();
+                if (renderer != null)
+                {
+                    renderer.material = eventMaterial;
+                }
+            }
+            go.transform.position = new Vector3(parentTransform.position.x + offsetX, parentTransform.position.y - 0.01f, parentTransform.position.z + 0.025f);
             if (scaleX <= 0)
             {
-                scaleX = 0.01f;
+                go.transform.localScale = new Vector3(parentTransform.localScale.x * 0.01f, 0.01f, 0.05f);
+            }
+            else
+            {
+                go.transform.localScale = new Vector3(parentTransform.localScale.x * (float)scaleX, 0.01f, 0.05f);
             }
 
-            GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.transform.position = new Vector3(parentTransform.position.x + offsetX, parentTransform.position.y - 0.01f, parentTransform.position.z + 0.025f);
-            go.transform.localScale = new Vector3(parentTransform.localScale.x * (float)scaleX, 0.01f, 0.05f);
-            go.transform.parent = parentTransform;
-
+            
             bool foundOverlap = isOverlappingExistingMarker(go);
             int loopEscape = 0;
             while (foundOverlap && loopEscape < 6)
             {
-                go.transform.Translate(0, -0.011f, 0);
+                go.transform.Translate(0, -0.011f, 0, Space.World);
                 foundOverlap = isOverlappingExistingMarker(go);
                 loopEscape++;
             }
+            go.transform.parent = parentTransform;
 
+            shouldRotate = (scaleX <= 0);
+            
             markers.Add(go);
+            return go;
         }
 
         bool isOverlappingExistingMarker(GameObject go)
