@@ -54,6 +54,8 @@ public class AccordianManager : MonoBehaviour {
 
     public void tryToAdjustDistance(Vector3 pos)
     {
+        if (!gameObject.activeInHierarchy) return;
+
         Vector3 v = pos - gameObject.transform.position;
         float d = Vector3.Dot(v, gameObject.transform.forward);
         if (d > 0.0f) return;

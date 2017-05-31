@@ -27,6 +27,8 @@ public class ViveController : SteamVR_TrackedObject
 
     bool onSlider = false;
     bool moveSlider = false;
+    bool gripPressed = false;
+    bool scaleTimeline = false;
 
     CVRSystem vrSystem;
 
@@ -117,6 +119,11 @@ public class ViveController : SteamVR_TrackedObject
         else if (activeMove) activeMoveScaleManager.updateMove(transform, deviceRay.origin);
         else if (activeScale) activeMoveScaleManager.updateScale(deviceRay);
 
+        if( scaleTimeline )
+        {
+            currSliderScript.updateScale(transform.position, otherController.transform.position);
+        }
+
     }
 
     public void releaseController()
@@ -162,18 +169,33 @@ public class ViveController : SteamVR_TrackedObject
                 (prevState.ulButtonPressed & SteamVR_Controller.ButtonMask.Grip) == 0)
             {
                 // hit the grip button
-                Vector3 dir = transform.forward - transform.up;
-                dir.y = 0.0f;
-                dir.Normalize();
-                Vector3 pos = transform.position;
+                gripPressed = true;
 
-                accordianManager.activate(pos, dir);
+                if( otherControllerScript.isGripPressed() )
+                {
+                    accordianManager.deactivate();
+                    scaleTimeline = true;
+                    currSliderScript.startScale(transform.position, otherController.transform.position);
+                }
+                else
+                {
+                    Vector3 dir = transform.forward - transform.up;
+                    dir.y = 0.0f;
+                    dir.Normalize();
+                    Vector3 pos = transform.position;
+
+                    accordianManager.activate(pos, dir);
+                }
             }
 
             else if ((state.ulButtonPressed & SteamVR_Controller.ButtonMask.Grip) == 0 &&
                 (prevState.ulButtonPressed & SteamVR_Controller.ButtonMask.Grip) != 0)
             {
+                gripPressed = false;
+                currSliderScript.endScale();
+                scaleTimeline = false;
                 accordianManager.deactivate();
+
             }
 
 
@@ -222,7 +244,7 @@ public class ViveController : SteamVR_TrackedObject
         }
 
 
-        if ((state.ulButtonPressed & SteamVR_Controller.ButtonMask.Grip) != 0)
+        if ((state.ulButtonPressed & SteamVR_Controller.ButtonMask.Grip) != 0 )
         {
             accordianManager.tryToAdjustDistance(transform.position);
         }
@@ -334,8 +356,8 @@ public class ViveController : SteamVR_TrackedObject
             moveSlider = false;
             currSliderScript.deactivateControlLine();
 
-            Vector3 currPos = currSliderScript.getCurrentPosition();
-            sqlConnClass.setTimeSlice(currPos.x);
+            float currPos = currSliderScript.getCurrentRelativePosition();
+            sqlConnClass.setTimeSlice(currPos);
         }
         else if (activeScale)
         {
@@ -588,6 +610,11 @@ public class ViveController : SteamVR_TrackedObject
     void hideNodeInfo()
     {
         nodeStatusObject.SetActive(false);
+    }
+
+    public bool isGripPressed()
+    {
+        return gripPressed;
     }
 
 }

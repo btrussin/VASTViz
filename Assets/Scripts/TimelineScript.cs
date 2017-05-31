@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 public class TimelineScript : MonoBehaviour {
 
@@ -14,18 +15,34 @@ public class TimelineScript : MonoBehaviour {
 
     public GameObject baseLine;
 
+    public GameObject[] anchoredLabels;
+
     float stepDistance;
     Vector3 currPosition;
+
+    float baseScale = 1.0f;
+    float currScale = 1.0f;
+
+    float baseCtrlrDist = 0.0f;
+
+    float currSliderPositionRelative = 0.0f;
 
     Color activeColor;
     Color hightlightColor;
     Color normalColor;
+
+    bool activeScale = false;
+
+    List<GameObject> scalableElements = new List<GameObject>();
 
     // Use this for initialization
     void Start() {
         activeColor = new Color32(255, 255, 0, 255);
         hightlightColor = new Color32(0, 255, 0, 255);
         normalColor = new Color32(0, 128, 0, 255);
+
+        scalableElements.Add(baseLine);
+        updateSliderPosition(currSliderPositionRelative);
     }
 
     // Update is called once per frame
@@ -101,6 +118,8 @@ public class TimelineScript : MonoBehaviour {
         rend.material = lineMaterial;
 
         rend.SetPositions(pts);
+
+        scalableElements.Add(connCurve);
     }
 
     public void hightlightControlLine()
@@ -137,42 +156,74 @@ public class TimelineScript : MonoBehaviour {
         lineRend.GetPositions(positions);
 
 
-        Vector3 leftPoint = gameObject.transform.position + positions[0].x * gameObject.transform.right + positions[0].y * gameObject.transform.up + positions[0].z * gameObject.transform.forward;
-        Vector3 rightPoint = gameObject.transform.position + positions[1].x * gameObject.transform.right + positions[1].y * gameObject.transform.up + positions[1].z * gameObject.transform.forward;
+        Vector3 leftPoint = gameObject.transform.position + positions[0].x * gameObject.transform.right * currScale + positions[0].y * gameObject.transform.up + positions[0].z * gameObject.transform.forward;
+        Vector3 rightPoint = gameObject.transform.position + positions[1].x * gameObject.transform.right * currScale + positions[1].y * gameObject.transform.up + positions[1].z * gameObject.transform.forward;
 
         // project that point onto the world positions of the slider ends
         Vector3 v1 = rightPoint - leftPoint;
         Vector3 v2 = propPos - leftPoint;
 
         // 'd' is the vector-projection amount of v2 onto v1
-        float d = Vector3.Dot(v1, v2) / Vector3.Dot(v1, v1);
+        float d = Mathf.Clamp(Vector3.Dot(v1, v2) / Vector3.Dot(v1, v1), 0.0f, 1.0f);
 
-        updateSliderPosition(d);
+        currSliderPositionRelative = d;
+
+        updateSliderPosition(currSliderPositionRelative);
     }
 
+    // d is between 0 and 1
     public void updateSliderPosition(float d)
     {
         // 'd' is also the correct linear combination of the left and right slider edges
         // left * d + right * ( 1 - d )
         currPosition = slider.transform.localPosition;
-        currPosition.x = Mathf.Clamp(d, 0.0f, 1.0f);
+        currPosition.x = currScale * (d - 0.5f);
         slider.transform.localPosition = currPosition;
     }
 
-    public void updateSliderEndPosition(float d)
+    public float getCurrentRelativePosition()
     {
-        // 'd' is also the correct linear combination of the left and right slider edges
-        // left * d + right * ( 1 - d )
-        currPosition = slider.transform.localPosition;
-        currPosition.x = Mathf.Clamp(d, 0.0f, 1.0f);
-        slider.transform.localPosition = currPosition;
+        return currSliderPositionRelative;
     }
 
-    public Vector3 getCurrentPosition()
+    public void startScale(Vector3 posA, Vector3 posB)
     {
-        return currPosition;
+        Vector3 vec = posA - posB;
+        baseCtrlrDist = vec.magnitude;
+        activeScale = true;
     }
 
-    
-    
+    public void updateScale(Vector3 posA, Vector3 posB)
+    {
+        if (!activeScale) return;
+
+        Vector3 vec = posA - posB;
+
+        currScale = vec.magnitude / baseCtrlrDist * baseScale;
+
+        foreach( GameObject gObj in scalableElements)
+        {
+            vec = gObj.transform.localScale;
+            vec.x = currScale;
+            gObj.transform.localScale = vec;
+        }
+
+        updateSliderPosition(currSliderPositionRelative);
+
+        Vector3 v;
+        foreach (GameObject label in anchoredLabels)
+        {
+            v = label.transform.localPosition;
+            v.x = -currScale * 0.5f;
+            label.transform.localPosition = v;
+        }
+
+    }
+
+    public void endScale()
+    {
+        baseScale = currScale;
+        activeScale = false;
+    }
+
 }

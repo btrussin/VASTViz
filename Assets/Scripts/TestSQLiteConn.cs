@@ -119,6 +119,8 @@ public class TestSQLiteConn : MonoBehaviour
     SubnetMapping[] subnetMappings = new SubnetMapping[3];
     public GameObject timeline;
 
+    TimelineScript timelineScript;
+
     dbDataType currDbDataType = dbDataType.NETWORK_FLOW;
 
     bool inAnimation = false;
@@ -126,7 +128,7 @@ public class TestSQLiteConn : MonoBehaviour
     // Use this for initialization
     void Start()
     {
-
+        timelineScript = timeline.GetComponent<TimelineScript>();
         iterTimeOffset = maxIterTime * 1000.0;
 
         for (int i = 0; i < 3; i++)
@@ -217,10 +219,9 @@ public class TestSQLiteConn : MonoBehaviour
         {
             currTimeIdx++;
 
-            if (currTimeIdx >= timeSlices.Length) currTimeIdx = 0;
+            currTimeIdx = Math.Max(0, Math.Min(timeSlices.Length - 2, currTimeIdx));
 
-            TimelineScript ts = timeline.GetComponent<TimelineScript>();
-            ts.updateSliderPosition((float)currTimeIdx / (float)timeSlices.Length);
+            timelineScript.updateSliderPosition((float)currTimeIdx / (float)timeSlices.Length);
 
             Debug.Log("Getting DB Values");
             getVals();
@@ -532,7 +533,6 @@ public class TestSQLiteConn : MonoBehaviour
 
             Vector3 offset = new Vector3(0.0f, 0.0f, -0.02f);
 
-            TimelineScript timelineScript = timeline.GetComponent<TimelineScript>();
             timelineScript.createLines(timesliceNFCounts, Color.white, offset);
 
         }
@@ -586,7 +586,6 @@ public class TestSQLiteConn : MonoBehaviour
 
             Vector3 offset = new Vector3(0.0f, 0.0f, -0.04f);
 
-            TimelineScript timelineScript = timeline.GetComponent<TimelineScript>();
             timelineScript.createLines(timesliceBBCounts, Color.red, offset);
 
 
@@ -636,7 +635,6 @@ public class TestSQLiteConn : MonoBehaviour
 
             Vector3 offset = new Vector3(0.0f, 0.0f, 0.0f);
 
-            TimelineScript timelineScript = timeline.GetComponent<TimelineScript>();
             timelineScript.createLines(timesliceIPSCounts, Color.yellow, offset);
 
 
@@ -649,7 +647,7 @@ public class TestSQLiteConn : MonoBehaviour
     {
         if (inc <= 0.0f) setTimeSlice(0);
         else if (inc >= 1.0f) setTimeSlice(timeSlices.Length - 1);
-        else setTimeSlice((int)(inc * (float)timeSlices.Length));
+        else setTimeSlice((int)(inc * (float)(timeSlices.Length-1)));
     }
 
     public void setTimeSlice(int inc)
@@ -657,7 +655,8 @@ public class TestSQLiteConn : MonoBehaviour
         if (currTimeIdx == inc) return;
         if (inc < 0 || inc >= timeSlices.Length) return;
 
-        currTimeIdx = inc;
+        currTimeIdx = Math.Max(0, Math.Min(timeSlices.Length - 2, inc));
+
         getVals();
 
         UpdateActiveTimeRange();
@@ -701,7 +700,7 @@ public class TestSQLiteConn : MonoBehaviour
 
     void getVals()
     {
-        if (currTimeIdx >= timeSlices.Length - 1 || currTimeIdx < 0) return;
+        if (currTimeIdx >= timeSlices.Length - 2 || currTimeIdx < 0) return;
 
         for (int i = 0; i < subnetObjects.Length; i++)
         {
