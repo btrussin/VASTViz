@@ -5,7 +5,6 @@
 //--------------------------------------------------------------
 
 using UnityEngine;
-using UnityEngine.Rendering;
 using System.Collections;
 using Valve.VR;
 using System.Collections.Generic;
@@ -78,17 +77,17 @@ namespace RealityCheck
 
                     pRect.vCorners0.v0 = x;
                     pRect.vCorners0.v1 = 0;
-                    pRect.vCorners0.v2 = z;
+                    pRect.vCorners0.v2 = -z;
 
-                    pRect.vCorners1.v0 = x;
+                    pRect.vCorners1.v0 = -x;
                     pRect.vCorners1.v1 = 0;
                     pRect.vCorners1.v2 = -z;
 
                     pRect.vCorners2.v0 = -x;
                     pRect.vCorners2.v1 = 0;
-                    pRect.vCorners2.v2 = -z;
+                    pRect.vCorners2.v2 = z;
 
-                    pRect.vCorners3.v0 = -x;
+                    pRect.vCorners3.v0 = x;
                     pRect.vCorners3.v1 = 0;
                     pRect.vCorners3.v2 = z;
 
@@ -104,7 +103,9 @@ namespace RealityCheck
         {
             HmdQuad_t rect = new HmdQuad_t();
             if (!GetBounds(size, ref rect))
+            {
                 return;
+            }
 
             HmdVector3_t[] corners = new HmdVector3_t[] { rect.vCorners0, rect.vCorners1, rect.vCorners2, rect.vCorners3 };
 
@@ -378,7 +379,43 @@ namespace RealityCheck
             return true;
         }
 
+#if UNITY_EDITOR
+        Hashtable values;
+        void Update()
+        {
+            if (!Application.isPlaying)
+            {
+                var fields = GetType().GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
 
+                bool rebuild = false;
+
+                if (values == null || (borderThickness != 0.0f && GetComponent<MeshFilter>().sharedMesh == null))
+                {
+                    rebuild = true;
+                }
+                else
+                {
+                    foreach (var f in fields)
+                    {
+                        if (!values.Contains(f) || !f.GetValue(this).Equals(values[f]))
+                        {
+                            rebuild = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (rebuild)
+                {
+                    BuildMesh();
+
+                    values = new Hashtable();
+                    foreach (var f in fields)
+                        values[f] = f.GetValue(this);
+                }
+            }
+        }
+#endif
 
         void OnDrawGizmos()
         {
@@ -388,7 +425,9 @@ namespace RealityCheck
         public void DrawWireframe()
         {
             if (vertices == null || vertices.Length == 0)
+            {
                 return;
+            }
 
             Vector3 offset = transform.TransformVector(Vector3.up * 2.0f);
             for (int i = 0; i < 4; i++)
@@ -420,6 +459,15 @@ namespace RealityCheck
                 // we need to wait for tracking.
                 if (size == Size.Calibrated)
                     StartCoroutine("UpdateBounds");
+                else
+                {
+                    GetComponent<MeshFilter>().mesh = null; // clear existing
+                    BuildMesh();
+                }
+            }
+            else
+            {
+
             }
         }
 
