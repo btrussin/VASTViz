@@ -157,11 +157,6 @@ public class TestSQLiteConn : MonoBehaviour
 
         dbconn.Open(); //Open connection to the database.
 
-        /* DELETE NEXT LINE */
-        //temp();
-
-
-
         numSecondsPerSlice = numMinutesPerSlice * 60;
 
         setupAllSubnets();
@@ -223,7 +218,6 @@ public class TestSQLiteConn : MonoBehaviour
 
             timelineScript.updateSliderPosition((float)currTimeIdx / (float)timeSlices.Length);
 
-            Debug.Log("Getting DB Values");
             getVals();
 
             UpdateActiveTimeRange();
@@ -533,7 +527,7 @@ public class TestSQLiteConn : MonoBehaviour
 
             Vector3 offset = new Vector3(0.0f, 0.0f, -0.02f);
 
-            timelineScript.createLines(timesliceNFCounts, Color.white, offset);
+            timelineScript.createLines(timesliceNFCounts, Color.white, offset, 1);
 
         }
 
@@ -586,7 +580,7 @@ public class TestSQLiteConn : MonoBehaviour
 
             Vector3 offset = new Vector3(0.0f, 0.0f, -0.04f);
 
-            timelineScript.createLines(timesliceBBCounts, Color.red, offset);
+            timelineScript.createLines(timesliceBBCounts, Color.red, offset, 2);
 
 
 
@@ -635,7 +629,7 @@ public class TestSQLiteConn : MonoBehaviour
 
             Vector3 offset = new Vector3(0.0f, 0.0f, 0.0f);
 
-            timelineScript.createLines(timesliceIPSCounts, Color.yellow, offset);
+            timelineScript.createLines(timesliceIPSCounts, Color.yellow, offset, 0);
 
 
 

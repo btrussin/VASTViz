@@ -2,6 +2,12 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+public enum AccordianActionType
+{
+    SUBNETS,
+    TIMELINE
+}
+
 public class AccordianManager : MonoBehaviour {
 
     public GameObject backQuad;
@@ -18,11 +24,18 @@ public class AccordianManager : MonoBehaviour {
     SubnetMapping submap2 = null;
     SubnetMapping submap3 = null;
 
+    public GameObject timeline;
+    TimelineScript timelineScript;
+
+    AccordianActionType accordianType = AccordianActionType.SUBNETS;
+
     // Use this for initialization
     void Start () {
         submap1 = subnet1.GetComponent<SubnetMapping>();
         submap2 = subnet2.GetComponent<SubnetMapping>();
         submap3 = subnet3.GetComponent<SubnetMapping>();
+
+        timelineScript = timeline.GetComponent<TimelineScript>();
     }
 	
 	// Update is called once per frame
@@ -30,17 +43,35 @@ public class AccordianManager : MonoBehaviour {
 		
 	}
 
+    public void setAccordianType(AccordianActionType type)
+    {
+        accordianType = type;
+    }
+
     public void activate(Vector3 pos, Vector3 dir)
     {
-        
-        if( !submap1 || !submap2 || !submap3 )
+        float dist = 0.0f;
+        if (accordianType == AccordianActionType.SUBNETS)
         {
-            submap1 = subnet1.GetComponent<SubnetMapping>();
-            submap2 = subnet2.GetComponent<SubnetMapping>();
-            submap3 = subnet3.GetComponent<SubnetMapping>();
+            if (!submap1 || !submap2 || !submap3)
+            {
+                submap1 = subnet1.GetComponent<SubnetMapping>();
+                submap2 = subnet2.GetComponent<SubnetMapping>();
+                submap3 = subnet3.GetComponent<SubnetMapping>();
+            }
+
+            dist = submap1.currLayerDist;
+            
+        }
+        else if (accordianType == AccordianActionType.TIMELINE)
+        {
+            if (!timelineScript)
+            {
+                timelineScript = timeline.GetComponent<TimelineScript>();
+            }
+            dist = timelineScript.getCurrentOffset();
         }
 
-        float dist = submap1.currLayerDist;
         gameObject.SetActive(true);
         gameObject.transform.forward = dir;
         gameObject.transform.position = pos + dir * dist * 2.0f;
@@ -61,9 +92,17 @@ public class AccordianManager : MonoBehaviour {
         if (d > 0.0f) return;
 
         float halfDist = -d * 0.5f;
-        submap1.updateDistance(halfDist);
-        submap2.updateDistance(halfDist);
-        submap3.updateDistance(halfDist);
+
+        if (accordianType == AccordianActionType.SUBNETS)
+        {
+            submap1.updateDistance(halfDist);
+            submap2.updateDistance(halfDist);
+            submap3.updateDistance(halfDist);
+        }
+        else if (accordianType == AccordianActionType.TIMELINE)
+        {
+            timelineScript.offsetElements(halfDist);
+        }
 
         updateSubLayerReps(halfDist);
     }

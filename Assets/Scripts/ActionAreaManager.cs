@@ -397,16 +397,10 @@ public class ActionAreaManager : MonoBehaviour {
         int numNodes = currentActiveNodes.Count;
         int numExtNodes = exteriorNodeRefs.Count;
 
-
-
-        Debug.Log("Curr Page before logic: " + currNodePage);
-
         int maxPage = (numNodes + maxNodesPerPage - 1) / maxNodesPerPage;
 
         if (currNodePage < 1) currNodePage = 1;
         else if (currNodePage > maxPage) currNodePage = maxPage;
-
-        Debug.Log("Curr Page after logic: " + currNodePage);
 
         // update the page label and arrows
         TextMesh tMesh = pageText.GetComponent<TextMesh>();

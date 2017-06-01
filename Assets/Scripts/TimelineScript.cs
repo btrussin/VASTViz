@@ -2,6 +2,13 @@
 using System.Collections;
 using System.Collections.Generic;
 
+
+public struct layerOffsetElement
+{
+    public GameObject gameObject;
+    public int offsetLayer;
+}
+
 public class TimelineScript : MonoBehaviour {
 
     public Material lineMaterial;
@@ -35,6 +42,13 @@ public class TimelineScript : MonoBehaviour {
 
     List<GameObject> scalableElements = new List<GameObject>();
 
+    List<layerOffsetElement> layerElements = new List<layerOffsetElement>();
+
+    float currLayerOffset = 0.02f;
+
+    BoxCollider boxCollider;
+
+
     // Use this for initialization
     void Start() {
         activeColor = new Color32(255, 255, 0, 255);
@@ -43,6 +57,15 @@ public class TimelineScript : MonoBehaviour {
 
         scalableElements.Add(baseLine);
         updateSliderPosition(currSliderPositionRelative);
+        for(int i = 0; i < anchoredLabels.Length; i++)
+        {
+            layerOffsetElement elem;
+            elem.offsetLayer = i;
+            elem.gameObject = anchoredLabels[i];
+            layerElements.Add(elem);
+        }
+
+        boxCollider = gameObject.GetComponent<BoxCollider>();
     }
 
     // Update is called once per frame
@@ -50,16 +73,23 @@ public class TimelineScript : MonoBehaviour {
         if (Input.GetKeyDown(KeyCode.M))
         {
             Vector3 p = slider.transform.localPosition;
-            Debug.Log("slider localPosition: " + p);
             p.x += stepDistance;
             slider.transform.localPosition = p;
 
             p = slider.transform.position;
-            Debug.Log("slider position: " + p);
+        }
+
+        if (Input.GetKeyDown(KeyCode.S))
+        {
+            offsetElements(currLayerOffset + 0.01f);
+        }
+        else if (Input.GetKeyDown(KeyCode.D))
+        {
+            offsetElements(currLayerOffset - 0.01f);
         }
     }
 
-    public void createLines(int[] countVals, Color color, Vector3 graphOffset)
+    public void createLines(int[] countVals, Color color, Vector3 graphOffset, int layer)
     {
         stepDistance = 1.0f / (float)(countVals.Length - 1);
 
@@ -86,18 +116,15 @@ public class TimelineScript : MonoBehaviour {
         Vector3 forward = transform.forward;
         Vector3 right = transform.right;
 
-        //Vector3 mainOffset = transform.position + new Vector3(0.0f, 0.0f, 0.1f);
         Vector3 mainOffset = transform.position;
 
         for (int i = 0; i < countVals.Length; i++)
-        {
-            tmpV = new Vector3(currX, tmpVals[i] * yScale, 0.0f) + graphOffset;
+        { 
+            tmpV = new Vector3(currX, tmpVals[i] * yScale, 0.0f);
 
             pts[i].x = Vector3.Dot(tmpV, right);
             pts[i].y = Vector3.Dot(tmpV, up);
             pts[i].z = -Vector3.Dot(tmpV, forward);
-
-            pts[i] += mainOffset;
 
             currX += xInc;
         }
@@ -105,6 +132,7 @@ public class TimelineScript : MonoBehaviour {
         GameObject connCurve = new GameObject();
 
         connCurve.transform.SetParent(gameObject.transform);
+        connCurve.transform.localPosition = graphOffset;
 
         connCurve.AddComponent<LineRenderer>();
         LineRenderer rend = connCurve.GetComponent<LineRenderer>();
@@ -120,6 +148,13 @@ public class TimelineScript : MonoBehaviour {
         rend.SetPositions(pts);
 
         scalableElements.Add(connCurve);
+
+        layerOffsetElement elem;
+        elem.offsetLayer = layer;
+        elem.gameObject = connCurve;
+        layerElements.Add(elem);
+
+        offsetElements(currLayerOffset);
     }
 
     public void hightlightControlLine()
@@ -218,12 +253,35 @@ public class TimelineScript : MonoBehaviour {
             label.transform.localPosition = v;
         }
 
+        Vector3 boxSize = boxCollider.size;
+        boxSize.x = currScale;
+        boxCollider.size = boxSize;
     }
 
     public void endScale()
     {
         baseScale = currScale;
         activeScale = false;
+    }
+
+    public void offsetElements(float amount)
+    {
+        if (amount < 0.0f) return;
+
+        currLayerOffset = amount;
+
+        Vector3 vec;
+        foreach(layerOffsetElement elem in layerElements)
+        {
+            vec = elem.gameObject.transform.localPosition;
+            vec.z = amount * elem.offsetLayer;
+            elem.gameObject.transform.localPosition = vec;
+        }
+    }
+
+    public float getCurrentOffset()
+    {
+        return currLayerOffset;
     }
 
 }

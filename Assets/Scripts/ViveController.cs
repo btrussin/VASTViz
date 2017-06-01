@@ -184,6 +184,20 @@ public class ViveController : SteamVR_TrackedObject
                     dir.Normalize();
                     Vector3 pos = transform.position;
 
+                    // shoot a ray and see if the controller is pointed at the timeline
+
+                    RaycastHit hitInfo;
+
+                    // try for timeline slider
+                    if (Physics.Raycast(deviceRay.origin, deviceRay.direction, out hitInfo, 30.0f, sliderMask))
+                    {
+                        accordianManager.setAccordianType(AccordianActionType.TIMELINE);
+                    }
+                    else
+                    {
+                        accordianManager.setAccordianType(AccordianActionType.SUBNETS);
+                    }
+
                     accordianManager.activate(pos, dir);
                 }
             }
@@ -412,9 +426,13 @@ public class ViveController : SteamVR_TrackedObject
             if (!moveSlider)
             {
                 SliderManager timelineObj = hitInfo.collider.gameObject.GetComponent<SliderManager>();
-                currSliderScript = timelineObj.mainTimeline.GetComponent<TimelineScript>();
 
-                currSliderScript.hightlightControlLine();
+                if(timelineObj )
+                {
+                    currSliderScript = timelineObj.mainTimeline.GetComponent<TimelineScript>();
+                    currSliderScript.hightlightControlLine();
+                }
+                
             }
 
             stopSearching = true;
