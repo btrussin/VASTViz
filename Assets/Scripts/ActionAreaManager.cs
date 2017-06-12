@@ -708,7 +708,7 @@ public class ActionAreaManager : MonoBehaviour {
 
             LineRenderer lineRend = lineObj.GetComponent<LineRenderer>();
             lineRend.useWorldSpace = false;
-            lineRend.numPositions = tmpLinePts.Length;
+            lineRend.positionCount = tmpLinePts.Length;
             lineRend.SetPositions(tmpLinePts);
             lineRend.startColor = Color.white;
             lineRend.endColor = Color.black;

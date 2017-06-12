@@ -140,7 +140,7 @@ public class TimelineScript : MonoBehaviour {
         rend.endWidth = 0.003f;
         rend.startColor = color;
         rend.endColor = color;
-        rend.numPositions = countVals.Length;
+        rend.positionCount = countVals.Length;
         rend.useWorldSpace = false;
 
         rend.material = lineMaterial;
